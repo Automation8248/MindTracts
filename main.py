@@ -6,21 +6,20 @@ import time
 from datetime import datetime
 
 # --- CONFIGURATION ---
-TARGET_USERNAME = "virtualaarvi"  # Jiska video download karna hai
+TARGET_USERNAME = "virtualaarvi"
 DOWNLOAD_FOLDER = "downloads_temp"
 HISTORY_FILE = "video_queue.json"
 
-# Secrets se values load karna
+# Secrets
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 IG_USER = os.getenv("INSTAGRAM_USER") 
 IG_PASS = os.getenv("INSTAGRAM_PASS") 
 
-# --- SETUP ---
 L = instaloader.Instaloader()
 
-# History Load/Save Logic
+# --- HELPER FUNCTIONS ---
 def load_history():
     if os.path.exists(HISTORY_FILE):
         try:
@@ -56,56 +55,66 @@ def send_to_webhook(file_path, caption, link):
 def run_job():
     print(f"[{datetime.now()}] Job Started...")
     
-    # 1. LOGIN PROCESS (New Step)
-    if IG_USER and IG_PASS:
-        try:
-            print(f"Attempting login as: {IG_USER}...")
-            L.login(IG_USER, IG_PASS)
-            print("✅ Login Successful!")
-        except Exception as e:
-            print(f"⚠️ Login Error: {e}")
-            print("Continuing anonymously (might fail if IP is blocked)...")
+    # 1. SMART LOGIN (Session File First -> Then Password)
+    session_file_path = f"session-{IG_USER}"
     
+    try:
+        if os.path.exists(session_file_path):
+            print(f"Using Session File: {session_file_path}")
+            L.load_session_from_file(IG_USER, filename=session_file_path)
+            print("✅ Login via Session Successful!")
+        elif IG_USER and IG_PASS:
+            print(f"Session file not found. Trying Password Login for {IG_USER}...")
+            L.login(IG_USER, IG_PASS)
+            print("✅ Login via Password Successful!")
+        else:
+            print("⚠️ No Credentials found!")
+    except Exception as e:
+        print(f"❌ Login Error: {e}")
+        print("Tip: Upload a session file to bypass 'Checkpoint' errors.")
+
     if not os.path.exists(DOWNLOAD_FOLDER):
         os.makedirs(DOWNLOAD_FOLDER)
 
-    # Database initialize (Fixes the 'pathspec' error)
     data = load_history()
-    if not os.path.exists(HISTORY_FILE):
-        save_history(data)
-
     processed_ids = set(data["processed"])
 
     try:
-        print(f"Scanning target profile: {TARGET_USERNAME}...")
+        print(f"Scanning profile: {TARGET_USERNAME} (Looking for oldest videos)...")
         profile = instaloader.Profile.from_username(L.context, TARGET_USERNAME)
         
         all_videos = []
-        count = 0
         
-        # Sirf latest 20 posts scan karenge
+        # NOTE: Hum loop chala rahe hain. Agar account bahut bada hai to time lega.
+        # Hum pehle 100 posts scan karenge taaki process fast rahe.
+        count = 0
         for post in profile.get_posts():
             if post.is_video:
                 all_videos.append({
                     "shortcode": post.shortcode,
-                    "date": post.date_utc.timestamp(),
+                    "date": post.date_utc.timestamp(), # Time for sorting
                     "caption": post.caption if post.caption else ""
                 })
             count += 1
-            if count > 20: break 
+            if count >= 100: # Safety Limit (Change to higher number if needed)
+                break 
 
-        # Sort: Oldest to Newest
+        # --- IMPORTANT: SORT OLDEST FIRST ---
+        # Low Timestamp = Old Date. High Timestamp = New Date.
+        # Ye line videos ko Oldest -> Newest arrange kar degi.
         all_videos.sort(key=lambda x: x["date"])
 
-        # Find Oldest Unsent Video
+        print(f"Found {len(all_videos)} videos. Checking for oldest unsent...")
+
+        # Find the FIRST video in the list that is NOT in history
         target = None
         for vid in all_videos:
             if vid["shortcode"] not in processed_ids:
                 target = vid
-                break
+                break # Pehla milte hi ruk jao (Kyunki wo sorted list ka sabse purana hai)
         
         if target:
-            print(f"🎯 Found new video to process: {target['shortcode']}")
+            print(f"🎯 Selected Oldest Available Video: {target['shortcode']}")
             post = instaloader.Post.from_shortcode(L.context, target['shortcode'])
             
             L.download_post(post, target=DOWNLOAD_FOLDER)
@@ -126,14 +135,14 @@ def run_job():
                 # Update History
                 data["processed"].append(target['shortcode'])
                 save_history(data)
-                print("✅ Process Complete.")
+                print("✅ Task Completed.")
             else:
-                print("❌ Downloaded file not found.")
+                print("❌ Download fail.")
         else:
-            print("⚠️ No new videos pending in the last 20 posts.")
+            print("⚠️ All old videos are already sent!")
 
     except Exception as e:
-        print(f"❌ Main Error: {e}")
+        print(f"❌ Error: {e}")
 
 if __name__ == "__main__":
     run_job()
