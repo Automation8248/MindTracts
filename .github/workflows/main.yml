@@ -1,21 +1,23 @@
-name: repost
+name: Instagram Repost Bot
 
 on:
   schedule:
-    - cron: "0 6 * * *"   # daily
+    - cron: '0 4 * * *'   # Daily run
   workflow_dispatch:
 
 jobs:
-  run:
+  repost:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
         with:
-          python-version: "3.10"
-      - run: pip install -r requirements.txt
-      - run: python main.py
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          CHAT_ID: ${{ secrets.CHAT_ID }}
-          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run bot
+        run: python repost.py
