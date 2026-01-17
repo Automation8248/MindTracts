@@ -7,7 +7,7 @@ from telegram import Bot
 INSTAGRAM_USERNAME = "virtualaarvi"
 
 # 👉 Apna Telegram USER CHAT ID yahan daalo (number, quotes nahi)
-TELEGRAM_CHAT_ID = 123456789  
+TELEGRAM_CHAT_ID = 8528694825  
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
