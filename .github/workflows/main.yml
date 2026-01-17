@@ -1,50 +1,25 @@
-name: Daily Instagram Auto Poster
+name: Daily Instagram Repost
 
 on:
   schedule:
-    - cron: '30 4 * * *'
-    - cron: '30 14 * * *'
+    - cron: "0 10 * * *"
   workflow_dispatch:
 
 jobs:
-  run_poster:
+  repost:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v4
         with:
-          python-version: '3.9'
+          python-version: "3.10"
 
       - name: Install dependencies
-        run: |
-          pip install instaloader requests
+        run: pip install -r requirements.txt
 
-      - name: Run Python Script
-        env:
-          # Yahan hum secrets pass kar rahe hain script ko
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-          INSTAGRAM_USER: ${{ secrets.INSTAGRAM_USER }}
-          INSTAGRAM_PASS: ${{ secrets.INSTAGRAM_PASS }}
+      - name: Run script
         run: python main.py
-
-      - name: Save History
-        run: |
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions@github.com"
-          
-          # Check karega file hai ya nahi taaki error na aaye
-          if [ -f video_queue.json ]; then
-            git add video_queue.json
-            git commit -m "Update posted video history" || echo "No changes to commit"
-            git push
-          else
-            echo "History file not found, skipping save."
-          fi
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
