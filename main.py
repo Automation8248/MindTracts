@@ -8,24 +8,38 @@ WEBHOOK = os.getenv("WEBHOOK_URL")
 
 bot = Bot(BOT_TOKEN)
 
-rss = feedparser.parse(open("rss_url.txt").read().strip())
-entries = list(reversed(rss.entries))  # oldest → newest
+rss_url = open("rss_url.txt").read().strip()
+feed = feedparser.parse(rss_url)
 
-last = 0
-if os.path.exists("last_sent.txt"):
-    last = int(open("last_sent.txt").read())
+entries = list(reversed(feed.entries))  # oldest → newest
 
-if last >= len(entries):
-    print("No new posts")
+last = int(open("last_sent.txt").read()) if os.path.exists("last_sent.txt") else 0
+
+video_post = None
+index = last
+
+while index < len(entries):
+    link = entries[index].link.lower()
+    if "/reel/" in link or "/p/" in link:
+        video_post = entries[index]
+        break
+    index += 1
+
+if not video_post:
+    print("No video post found")
     exit()
 
-post = entries[last]
-video_url = post.link
-title = post.title
-caption = post.get("summary", "")
+video_url = video_post.link
+title = video_post.title
+caption = video_post.get("summary", "")
 
 # download video
-ydl_opts = {"outtmpl": "video.mp4", "quiet": True}
+ydl_opts = {
+    "outtmpl": "video.mp4",
+    "format": "mp4",
+    "quiet": True
+}
+
 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
     info = ydl.extract_info(video_url, download=True)
     tags = " ".join(info.get("tags", [])[:10])
@@ -40,7 +54,7 @@ res = requests.post(
 )
 catbox_url = res.text.strip()
 
-# telegram
+# send telegram
 bot.send_video(
     chat_id=CHAT_ID,
     video=catbox_url,
@@ -54,5 +68,5 @@ if WEBHOOK:
         "caption": final_caption
     })
 
-open("last_sent.txt", "w").write(str(last + 1))
+open("last_sent.txt", "w").write(str(index + 1))
 print("DONE")
