@@ -1,70 +1,58 @@
-import instaloader
-import os
-import requests
-import json
+import os, requests, feedparser
+from telegram import Bot
+import yt_dlp
 
-USERNAME = "virtualaarvi"
+BOT_TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("CHAT_ID")
+WEBHOOK = os.getenv("WEBHOOK_URL")
 
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+bot = Bot(BOT_TOKEN)
 
-L = instaloader.Instaloader(
-    download_videos=True,
-    download_video_thumbnails=False,
-    save_metadata=False,
-    compress_json=False
+rss = feedparser.parse(open("rss_url.txt").read().strip())
+entries = list(reversed(rss.entries))  # oldest → newest
+
+last = 0
+if os.path.exists("last_sent.txt"):
+    last = int(open("last_sent.txt").read())
+
+if last >= len(entries):
+    print("No new posts")
+    exit()
+
+post = entries[last]
+video_url = post.link
+title = post.title
+caption = post.get("summary", "")
+
+# download video
+ydl_opts = {"outtmpl": "video.mp4", "quiet": True}
+with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+    info = ydl.extract_info(video_url, download=True)
+    tags = " ".join(info.get("tags", [])[:10])
+
+final_caption = f"{title}\n\n{caption}\n\n{tags}"
+
+# upload to catbox
+res = requests.post(
+    "https://catbox.moe/user/api.php",
+    data={"reqtype": "fileupload"},
+    files={"fileToUpload": open("video.mp4", "rb")}
+)
+catbox_url = res.text.strip()
+
+# telegram
+bot.send_video(
+    chat_id=CHAT_ID,
+    video=catbox_url,
+    caption=final_caption[:1024]
 )
 
-# Login using session
-L.load_session_from_file(os.getenv("IG_USERNAME"), "session")
+# webhook
+if WEBHOOK:
+    requests.post(WEBHOOK, json={
+        "video": catbox_url,
+        "caption": final_caption
+    })
 
-profile = instaloader.Profile.from_username(L.context, USERNAME)
-
-posts = list(profile.get_posts())
-posts.reverse()  # oldest → newest
-
-# Track last posted
-STATE_FILE = "state.json"
-last_index = 0
-
-if os.path.exists(STATE_FILE):
-    last_index = json.load(open(STATE_FILE))["index"]
-
-post = posts[last_index]
-
-L.download_post(post, target="video")
-
-video_file = None
-for f in os.listdir("video"):
-    if f.endswith(".mp4"):
-        video_file = f
-        break
-
-# Upload to catbox.moe
-with open(f"video/{video_file}", "rb") as f:
-    r = requests.post(
-        "https://catbox.moe/user/api.php",
-        data={"reqtype": "fileupload"},
-        files={"fileToUpload": f},
-    )
-
-video_url = r.text.strip()
-caption = post.caption or "No caption"
-
-message = f"{caption}\n\n🎬 {video_url}"
-
-# Send Telegram
-requests.post(
-    f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage",
-    json={"chat_id": CHAT_ID, "text": message}
-)
-
-# Send Webhook
-requests.post(
-    WEBHOOK_URL,
-    json={"text": message}
-)
-
-# Save progress
-json.dump({"index": last_index + 1}, open(STATE_FILE, "w"))
+open("last_sent.txt", "w").write(str(last + 1))
+print("DONE")
