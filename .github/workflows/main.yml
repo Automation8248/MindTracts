@@ -2,7 +2,7 @@ name: repost
 
 on:
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "0 6 * * *"   # daily
   workflow_dispatch:
 
 jobs:
@@ -10,19 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-
       - uses: actions/setup-python@v4
         with:
           python-version: "3.10"
-
       - run: pip install -r requirements.txt
-
-      - name: Restore session
-        run: echo "${{ secrets.IG_SESSIONID }}" > session
-
       - run: python main.py
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-          IG_USERNAME: ${{ secrets.IG_USERNAME }}
