@@ -2,16 +2,14 @@ name: Instagram Auto Poster
 
 on:
   schedule:
-    - cron: '0 */1 * * *'  # Ye har 1 ghante (1 hour) mein chalega
-  workflow_dispatch:      # Isse aap "Run Workflow" button daba kar kabhi bhi chala sakte hain
+    - cron: '0 */1 * * *'  # Har 1 ghante mein chalega
+  workflow_dispatch:      # Manual run button
 
 jobs:
   run_bot:
     runs-on: ubuntu-latest
-    
-    # Ye permission zaroori hai taaki 'last_video.txt' save ho sake
     permissions:
-      contents: write
+      contents: write  # File save karne ki permission
 
     steps:
       - name: Checkout Code
@@ -22,13 +20,13 @@ jobs:
         with:
           python-version: '3.9'
 
-      - name: Install Libraries
+      - name: Install Correct Libraries
+        # FIX: Hum specifically purana version install kar rahe hain taaki error na aaye
         run: |
-          pip install instaloader requests python-telegram-bot
+          pip install instaloader requests "python-telegram-bot==13.15"
 
       - name: Run Python Script
         env:
-          # Ye saare Secrets GitHub Settings se aayenge
           BOT_USERNAME: ${{ secrets.BOT_USERNAME }}
           BOT_PASSWORD: ${{ secrets.BOT_PASSWORD }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
@@ -40,6 +38,7 @@ jobs:
         run: |
           git config --global user.name "GitHub Action Bot"
           git config --global user.email "action@github.com"
+          # Pehle check karenge file hai ya nahi, nahi hai to create karenge
+          touch last_video.txt
           git add last_video.txt
-          # Agar naya video mila to file save karke GitHub par upload karega
           git diff --quiet && git diff --staged --quiet || (git commit -m "Update last video" && git push)
