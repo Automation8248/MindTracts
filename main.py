@@ -4,6 +4,7 @@ import yt_dlp
 import sys
 import glob
 import re
+from deep_translator import GoogleTranslator
 
 # --- CONFIGURATION ---
 VIDEO_LIST_FILE = 'videos.txt'
@@ -13,8 +14,8 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 
-# SEO / Filler Tags (agar original tags kam pad jayein)
-SEO_TAGS = ["#viral", "#trending", "#reels", "#explore", "#shorts", "#fyp"]
+# Filler tags agar video ke tags kam pad jayein (Total 5 karne ke liye)
+SEO_TAGS = ["#reels", "#trending", "#viral", "#explore", "#love", "#shayari"]
 
 def get_next_video():
     processed_urls = []
@@ -34,42 +35,43 @@ def get_next_video():
             return url
     return None
 
-def clean_vtt_text(vtt_content):
-    lines = vtt_content.splitlines()
-    clean_lines = []
-    for line in lines:
-        if '-->' in line or line.strip() == '' or line.startswith('WEBVTT') or line.strip().isdigit():
-            continue
-        clean_line = re.sub(r'<[^>]+>', '', line).strip()
-        if clean_line and clean_line not in clean_lines:
-            clean_lines.append(clean_line)
-    return "\n".join(clean_lines[:50])
+def get_hindi_title(text):
+    try:
+        # Translate full title to Hindi
+        translated = GoogleTranslator(source='auto', target='hi').translate(text)
+        # Split into words and take first 4
+        words = translated.split()
+        short_title = " ".join(words[:4])
+        return short_title
+    except Exception as e:
+        print(f"Translation Error: {e}")
+        # Fallback: First 4 words of original text if translation fails
+        return " ".join(text.split()[:4])
 
 def generate_hashtags(original_tags):
-    # 1. Start clean list
     final_tags = []
     
-    # 2. Add Mandatory Tag First
+    # 1. First Tag is ALWAYS #aarvi
     final_tags.append("#aarvi")
     
-    # 3. Process Original Tags
-    forbidden = ["virtualaarvi"] # Lowercase mein likhein
+    # 2. Add video's original tags (excluding forbidden ones)
+    forbidden = ["virtualaarvi", "aarvi"] # aarvi already added manually
     
     for tag in original_tags:
         clean_tag = tag.replace(" ", "").lower()
-        # Filter forbidden tags
-        if clean_tag not in forbidden and f"#{clean_tag}" != "#aarvi":
+        if clean_tag not in forbidden and f"#{clean_tag}" not in final_tags:
             final_tags.append(f"#{clean_tag}")
             
-    # 4. Ensure Minimum 4 Tags (Add SEO tags if needed)
+    # 3. Fill up to exactly 5 tags
     for seo in SEO_TAGS:
-        if len(final_tags) < 4:
+        if len(final_tags) < 5:
             if seo not in final_tags:
                 final_tags.append(seo)
         else:
             break
             
-    return " ".join(final_tags)
+    # Limit to exactly 5 tags
+    return " ".join(final_tags[:5])
 
 def download_video_data(url):
     print(f"⬇️ Downloading: {url}")
@@ -81,12 +83,8 @@ def download_video_data(url):
         'format': 'best[ext=mp4]',
         'outtmpl': 'temp_video.%(ext)s',
         'quiet': True,
-        'writesubtitles': True,
-        'writeautomaticsub': True,
-        'subtitleslangs': ['en', 'hi', 'auto'],
     }
     
-    caption_text = "No captions."
     dl_filename = None
 
     try:
@@ -95,28 +93,27 @@ def download_video_data(url):
             dl_filename = ydl.prepare_filename(info)
             title = info.get('title', 'No Title')
             
-            # --- HASHTAG LOGIC CALL ---
+            # --- Generate Hindi Title (First 4 words) ---
+            hindi_4_words = get_hindi_title(title)
+            
+            # --- Generate Hashtags (Total 5) ---
             tags_list = info.get('tags', [])
             hashtags = generate_hashtags(tags_list)
 
-            sub_files = glob.glob("temp_video*.vtt")
-            if sub_files:
-                with open(sub_files[0], 'r', encoding='utf-8') as f:
-                    caption_text = clean_vtt_text(f.read())
     except Exception as e:
         print(f"❌ Download Error: {e}")
         return None
 
     return {
         "filename": dl_filename,
-        "title": title,
+        "title": title,          # Original Title (for Webhook)
+        "hindi_text": hindi_4_words, # Processed Hindi Text (for Telegram)
         "hashtags": hashtags,
-        "captions": caption_text,
         "original_url": url
     }
 
 def upload_to_catbox(filepath):
-    print("🚀 Uploading to Catbox (for Webhook backup)...")
+    print("🚀 Uploading to Catbox (for Webhook)...")
     try:
         with open(filepath, "rb") as f:
             response = requests.post(
@@ -134,45 +131,42 @@ def upload_to_catbox(filepath):
 def send_notifications(video_data, catbox_url):
     print("\n--- Sending Notifications ---")
     
-    # --- 1. TELEGRAM VIDEO UPLOAD ---
+    # --- Format Caption for Telegram ---
+    # 1. Hindi 4 words
+    # 2. 5 Dots spacing
+    # 3. 5 Hashtags
+    tg_caption = f"{video_data['hindi_text']}\n.\n.\n.\n.\n.\n{video_data['hashtags']}"
+    
+    # --- 1. TELEGRAM (Send Video File) ---
     if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
         print("📤 Sending Video File to Telegram...")
-        
-        # Caption Format
-        caption = f"{video_data['title']}\n\n{video_data['hashtags']}\n\n"
-        if video_data['captions'] != "No captions.":
-             caption += f"📝 **Quotes:**\n_{video_data['captions'][:400]}_\n"
-        
-        # API Endpoint for Video
         tg_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
         
         try:
             with open(video_data['filename'], 'rb') as video_file:
                 payload = {
                     "chat_id": str(TELEGRAM_CHAT_ID),
-                    "caption": caption[:1024], # Telegram caption limit
+                    "caption": tg_caption,
                     "parse_mode": "Markdown"
                 }
                 files = {'video': video_file}
-                
                 resp = requests.post(tg_url, data=payload, files=files)
                 
                 if resp.status_code == 200:
                     print("✅ Telegram Video Sent!")
                 else:
-                    print(f"❌ Telegram Video Fail: {resp.text}")
+                    print(f"❌ Telegram Fail: {resp.text}")
         except Exception as e:
             print(f"❌ Telegram Error: {e}")
 
-    # --- 2. WEBHOOK (Still sends URL) ---
+    # --- 2. WEBHOOK (Send Link + Caption) ---
     if WEBHOOK_URL:
         print(f"Sending to Webhook...")
         webhook_payload = {
-            "content": f"New Post: {video_data['title']}",
+            "content": tg_caption,  # Same caption for consistency
             "video_url": catbox_url,
-            "title": video_data['title'],
-            "hashtags": video_data['hashtags'],
-            "captions": video_data['captions']
+            "title_original": video_data['title'],
+            "hashtags": video_data['hashtags']
         }
         try:
             requests.post(WEBHOOK_URL, json=webhook_payload)
@@ -194,7 +188,7 @@ if __name__ == "__main__":
     data = download_video_data(next_url)
     
     if data and data['filename']:
-        # Webhook ke liye Catbox zaroori hai
+        # Catbox upload is needed for Webhook link
         catbox_link = upload_to_catbox(data['filename'])
         if not catbox_link: catbox_link = "Upload Failed"
 
