@@ -4,16 +4,17 @@ import yt_dlp
 import sys
 import glob
 import re
-import json
 
 # --- CONFIGURATION ---
 VIDEO_LIST_FILE = 'videos.txt'
 HISTORY_FILE = 'history.txt'
 
-# Secrets load karte waqt check karenge ki wo exist karte hain ya nahi
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
+
+# SEO / Filler Tags (agar original tags kam pad jayein)
+SEO_TAGS = ["#viral", "#trending", "#reels", "#explore", "#shorts", "#fyp"]
 
 def get_next_video():
     processed_urls = []
@@ -44,9 +45,34 @@ def clean_vtt_text(vtt_content):
             clean_lines.append(clean_line)
     return "\n".join(clean_lines[:50])
 
+def generate_hashtags(original_tags):
+    # 1. Start clean list
+    final_tags = []
+    
+    # 2. Add Mandatory Tag First
+    final_tags.append("#aarvi")
+    
+    # 3. Process Original Tags
+    forbidden = ["virtualaarvi"] # Lowercase mein likhein
+    
+    for tag in original_tags:
+        clean_tag = tag.replace(" ", "").lower()
+        # Filter forbidden tags
+        if clean_tag not in forbidden and f"#{clean_tag}" != "#aarvi":
+            final_tags.append(f"#{clean_tag}")
+            
+    # 4. Ensure Minimum 4 Tags (Add SEO tags if needed)
+    for seo in SEO_TAGS:
+        if len(final_tags) < 4:
+            if seo not in final_tags:
+                final_tags.append(seo)
+        else:
+            break
+            
+    return " ".join(final_tags)
+
 def download_video_data(url):
     print(f"⬇️ Downloading: {url}")
-    # Temp files cleanup
     for f in glob.glob("temp_video*"):
         try: os.remove(f)
         except: pass
@@ -68,8 +94,10 @@ def download_video_data(url):
             info = ydl.extract_info(url, download=True)
             dl_filename = ydl.prepare_filename(info)
             title = info.get('title', 'No Title')
-            tags = info.get('tags', [])
-            hashtags = " ".join([f"#{tag.replace(' ', '')}" for tag in tags[:10]])
+            
+            # --- HASHTAG LOGIC CALL ---
+            tags_list = info.get('tags', [])
+            hashtags = generate_hashtags(tags_list)
 
             sub_files = glob.glob("temp_video*.vtt")
             if sub_files:
@@ -83,11 +111,12 @@ def download_video_data(url):
         "filename": dl_filename,
         "title": title,
         "hashtags": hashtags,
-        "captions": caption_text
+        "captions": caption_text,
+        "original_url": url
     }
 
 def upload_to_catbox(filepath):
-    print("🚀 Uploading to Catbox.moe...")
+    print("🚀 Uploading to Catbox (for Webhook backup)...")
     try:
         with open(filepath, "rb") as f:
             response = requests.post(
@@ -98,93 +127,82 @@ def upload_to_catbox(filepath):
             if response.status_code == 200:
                 return response.text.strip()
             else:
-                print(f"❌ Catbox Error: {response.text}")
                 return None
-    except Exception as e:
-        print(f"❌ Upload Error: {e}")
+    except:
         return None
 
 def send_notifications(video_data, catbox_url):
     print("\n--- Sending Notifications ---")
     
-    # 1. TELEGRAM
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("⚠️ Telegram Token ya Chat ID settings me nahi mila. Skip kar raha hu.")
-    else:
-        caption = f"🎬 **{video_data['title']}**\n\n{video_data['hashtags']}\n\n🔗 {catbox_url}"
+    # --- 1. TELEGRAM VIDEO UPLOAD ---
+    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+        print("📤 Sending Video File to Telegram...")
+        
+        # Caption Format
+        caption = f"{video_data['title']}\n\n{video_data['hashtags']}\n\n"
         if video_data['captions'] != "No captions.":
-             caption += f"\n\n📝 **Captions:**\n_{video_data['captions'][:500]}_"
-
-        tg_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-        payload = {
-            "chat_id": str(TELEGRAM_CHAT_ID), 
-            "text": caption,
-            "parse_mode": "Markdown"
-        }
+             caption += f"📝 **Quotes:**\n_{video_data['captions'][:400]}_\n"
+        
+        # API Endpoint for Video
+        tg_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
+        
         try:
-            resp = requests.post(tg_url, json=payload)
-            if resp.status_code == 200:
-                print("✅ Telegram Sent Successfully!")
-            else:
-                print(f"❌ Telegram Fail ({resp.status_code}): {resp.text}")
+            with open(video_data['filename'], 'rb') as video_file:
+                payload = {
+                    "chat_id": str(TELEGRAM_CHAT_ID),
+                    "caption": caption[:1024], # Telegram caption limit
+                    "parse_mode": "Markdown"
+                }
+                files = {'video': video_file}
+                
+                resp = requests.post(tg_url, data=payload, files=files)
+                
+                if resp.status_code == 200:
+                    print("✅ Telegram Video Sent!")
+                else:
+                    print(f"❌ Telegram Video Fail: {resp.text}")
         except Exception as e:
-            print(f"❌ Telegram Connection Error: {e}")
+            print(f"❌ Telegram Error: {e}")
 
-    # 2. WEBHOOK (Video URL specifically)
-    if not WEBHOOK_URL:
-        print("⚠️ Webhook URL settings me nahi mila. Skip kar raha hu.")
-    else:
-        print(f"Attempting to send to Webhook: {WEBHOOK_URL}")
-        # Aapki requirement ke hisab se Video URL bhej rahe hain
+    # --- 2. WEBHOOK (Still sends URL) ---
+    if WEBHOOK_URL:
+        print(f"Sending to Webhook...")
         webhook_payload = {
-            "content": f"New Video: {video_data['title']}", # Discord/General format
+            "content": f"New Post: {video_data['title']}",
             "video_url": catbox_url,
             "title": video_data['title'],
             "hashtags": video_data['hashtags'],
             "captions": video_data['captions']
         }
-        
         try:
-            # Headers add kiye taaki server reject na kare
-            headers = {'Content-Type': 'application/json'}
-            resp = requests.post(WEBHOOK_URL, json=webhook_payload, headers=headers)
-            
-            if resp.status_code in [200, 201, 204]:
-                print(f"✅ Webhook Sent Successfully! (Status: {resp.status_code})")
-            else:
-                print(f"❌ Webhook Fail ({resp.status_code}): {resp.text}")
-        except Exception as e:
-            print(f"❌ Webhook Connection Error: {e}")
+            requests.post(WEBHOOK_URL, json=webhook_payload)
+            print("✅ Webhook Sent!")
+        except:
+            print("❌ Webhook Failed")
 
 def update_history(url):
     with open(HISTORY_FILE, 'a') as f:
         f.write(url + '\n')
 
 if __name__ == "__main__":
-    # Check Environment Variables first
-    if not TELEGRAM_BOT_TOKEN: print("⚠️ Warning: TELEGRAM_BOT_TOKEN is missing")
-    if not WEBHOOK_URL: print("⚠️ Warning: WEBHOOK_URL is missing")
-
     next_url = get_next_video()
     
     if not next_url:
-        print("💤 No new videos to process.")
+        print("💤 No new videos.")
         sys.exit(0)
         
     data = download_video_data(next_url)
     
     if data and data['filename']:
+        # Webhook ke liye Catbox zaroori hai
         catbox_link = upload_to_catbox(data['filename'])
+        if not catbox_link: catbox_link = "Upload Failed"
+
+        send_notifications(data, catbox_link)
+        update_history(next_url)
         
-        if catbox_link:
-            print(f"🎉 Generated Link: {catbox_link}")
-            send_notifications(data, catbox_link)
-            update_history(next_url)
-            
-            if os.path.exists(data['filename']):
-                os.remove(data['filename'])
-            print("✅ Task Done.")
-        else:
-            sys.exit(1)
+        if os.path.exists(data['filename']):
+            os.remove(data['filename'])
+        print("✅ Task Done.")
     else:
         sys.exit(1)
