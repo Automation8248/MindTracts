@@ -1,8 +1,8 @@
 import os
 import requests
 import sys
-import re
 import time
+import random
 from deep_translator import GoogleTranslator
 
 # --- CONFIGURATION ---
@@ -13,11 +13,15 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 
-# Public APIs (Agar ek fail ho to dusra try karega)
+# --- NEW WORKING SERVER LIST (2026 Updated) ---
+# Ye alag-alag servers hain. Agar ek fail hoga to dusra try karega.
 COBALT_INSTANCES = [
-    "https://api.cobalt.tools",
-    "https://cobalt.kwiatekmiki.pl",
-    "https://cobalt.q1.si",
+    "https://cobalt.tools",           # Official
+    "https://api.cobalt.tools",       # Official API
+    "https://cobalt.gamemonk.net",    # Mirror 1
+    "https://cobalt.lanex.dev",       # Mirror 2
+    "https://cobalt.unbound.sh",      # Mirror 3
+    "https://cobalt.int.r4fo.com",    # Mirror 4
 ]
 
 SEO_TAGS = ["#reels", "#trending", "#viral", "#explore", "#love", "#shayari"]
@@ -43,28 +47,6 @@ def get_next_video():
             return url
     return None
 
-def is_text_safe(text):
-    if not text: return False
-    lower_text = text.lower()
-    for word in FORBIDDEN_WORDS:
-        if word in lower_text:
-            return False
-    return True
-
-def translate_and_shorten(text):
-    if not text or not text.strip(): return None
-    try:
-        translated = GoogleTranslator(source='auto', target='hi').translate(text)
-        if is_text_safe(translated):
-            words = translated.split()
-            return " ".join(words[:5])
-    except: pass
-    
-    if is_text_safe(text):
-        words = text.split()
-        return " ".join(words[:5])
-    return "देखिए आज का वीडियो"
-
 def download_via_cobalt(url):
     print(f"🔄 Trying to download via API (No Cookies Needed)...")
     
@@ -76,39 +58,52 @@ def download_via_cobalt(url):
     
     payload = {
         "url": url,
-        "videoQuality": "max",
+        "vCodec": "h264",
+        "vQuality": "720",
         "filenamePattern": "basic"
     }
 
     download_url = None
     
-    # Try different servers if one fails
+    # Randomize list taaki load balance ho jaye
+    random.shuffle(COBALT_INSTANCES)
+
     for instance in COBALT_INSTANCES:
         try:
-            print(f"📡 Connecting to: {instance}")
-            api_url = f"{instance}/api/json"
-            resp = requests.post(api_url, json=payload, headers=headers, timeout=15)
+            # URL formatting check
+            base_url = instance.rstrip('/')
+            api_url = f"{base_url}/api/json"
+            
+            print(f"📡 Connecting to: {base_url} ...")
+            resp = requests.post(api_url, json=payload, headers=headers, timeout=10)
             
             if resp.status_code == 200:
                 data = resp.json()
                 if 'url' in data:
                     download_url = data['url']
-                    print("✅ Video Link Found!")
+                    print(f"✅ Video Link Found from {base_url}!")
                     break
-            elif resp.status_code == 429:
-                print("⚠️ Server busy, trying next...")
-                continue
+                elif 'picker' in data: # Kabhi kabhi wo list bhejta hai
+                     for item in data['picker']:
+                         if item['type'] == 'video':
+                             download_url = item['url']
+                             break
+                     if download_url: break
+
+            print(f"⚠️ Failed on {base_url} (Status: {resp.status_code})")
+            
         except Exception as e:
-            print(f"⚠️ Error on {instance}: {e}")
+            print(f"⚠️ Connection Error on {instance}: {str(e)[:50]}...")
             continue
             
     if not download_url:
-        print("❌ All APIs failed to fetch video.")
+        print("❌ All APIs failed. Instagram might be blocking these servers right now.")
         return None
 
-    # Now download the actual file
+    # Download File
     try:
-        file_resp = requests.get(download_url, stream=True)
+        print("⬇️ Downloading video file...")
+        file_resp = requests.get(download_url, stream=True, timeout=30)
         filename = "final_video.mp4"
         with open(filename, 'wb') as f:
             for chunk in file_resp.iter_content(chunk_size=1024):
@@ -119,14 +114,12 @@ def download_via_cobalt(url):
         return None
 
 def process_video(url):
-    # 1. Download Video
     filename = download_via_cobalt(url)
     if not filename: return None
 
-    # 2. Generate Basic Data (Since we are not scraping metadata heavily)
-    # API metadata nahi deta, to hum generic use karenge
+    # Generic Metadata (Since API doesn't give details)
     hindi_text = "✨ देखिए आज का शानदार वीडियो! ❤️"
-    hashtags = "#reels #trending #viral #explore #instagram " + " ".join(SEO_TAGS[:3])
+    hashtags = "#reels #trending #viral #explore " + " ".join(SEO_TAGS[:3])
 
     return {
         "filename": filename,
