@@ -1,48 +1,36 @@
-name: Daily Video Poster
+name: Daily Video Automation
 
 on:
   schedule:
-    - cron: '30 2 * * *'  # Daily 8:00 AM IST
-  workflow_dispatch:      # Manual Button
-
-permissions:
-  contents: write
+    - cron: '0 5 * * *'
+  workflow_dispatch:
 
 jobs:
-  run-poster:
+  run-automation:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
 
-    - name: Install Dependencies
-      run: |
-        pip install -r requirements.txt
-        sudo apt-get install -y ffmpeg
+      - name: Install Dependencies
+        run: pip install requests
 
-    # --- YEH PART SABSE ZAROORI HAI ---
-    - name: Run Automation Script
-      env:
-        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-      run: python main.py
-    # ----------------------------------
+      - name: Execute Script
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        run: python main.py
 
-    - name: Save History
-      run: |
-        git config --global user.name "GitHub Actions Bot"
-        git config --global user.email "actions@github.com"
-        git add history.txt
-        if git diff --staged --quiet; then
-          echo "No changes to history."
-        else
-          git commit -m "Update history [skip ci]"
+      - name: Save Changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add -u
+          git commit -m "System: Processed video removed" || exit 0
           git push
-        fi
