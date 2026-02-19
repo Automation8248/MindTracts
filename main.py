@@ -19,13 +19,147 @@ BRANCH_NAME = "main"
 
 # List 1: Titles (Har bar inme se koi ek randomly select hoga)
 TITLES_GRID = [
-"Aaj kuch unexpected ho gaya…"
+    "Psychology Says You’re Not Imagining This",
+    "This Is Why People Suddenly Change",
+    "Your Brain Does This Without You Knowing",
+    "If Someone Does This, Pay Attention",
+    "You Notice This Only When You Like Someone",
+    "Your Mind Is Testing You Right Now",
+    "People Reveal Themselves With This Habit",
+    "The Brain Interprets This As Danger",
+    "You Feel Drained For This Hidden Reason",
+    "This Behavior Always Means Something",
+    "You’ve Seen This But Never Understood It",
+    "Your Brain Reacts Faster Than You Think",
+    "Why Silence Makes People Uncomfortable",
+    "This Small Action Changes How People See You",
+    "Your Mind Is Protecting You From This",
+    "People Respect You When You Stop Doing This",
+    "The Real Reason People Pull Away",
+    "You Trust People Who Do This",
+    "This Is How The Brain Detects Lies",
+    "You Feel Awkward Because Of This Instinct",
+    "Your Brain Remembers Emotion, Not Words",
+    "People Notice This Before You Speak",
+    "This Habit Reveals Confidence Instantly",
+    "Why Overthinking Never Stops At Night",
+    "Your Brain Predicts People’s Intentions",
+    "This Reaction Is Completely Automatic",
+    "You Feel Attached Because Of This Trigger",
+    "People Mirror You Without Realizing",
+    "This Makes Someone Secretly Respect You",
+    "The Mind Hates Uncertainty For This Reason",
+    "You Feel Ignored Because Of This Signal",
+    "Your Brain Treats Rejection Like Pain",
+    "This Is Why First Impressions Never Change",
+    "People Test You Before Trusting You",
+    "You Remember Embarrassing Moments More",
+    "Your Brain Searches For Patterns Always",
+    "This Expression Reveals True Feelings",
+    "Why Quiet People Notice Everything",
+    "Your Mind Is Avoiding A Hard Truth",
+    "This Is How People Judge You Instantly",
+    "You Feel Safe Around People Who Do This",
+    "Your Brain Rewards Familiar Behavior",
+    "People Distance Themselves For This Reason",
+    "This Is A Sign Of Hidden Attraction",
+    "Your Brain Hates Being Ignored",
+    "You React Emotionally Before Thinking",
+    "This Makes Someone Feel Comfortable With You",
+    "The Brain Interprets Eye Contact Like This",
+    "You Miss Red Flags Because Of This Bias",
+    "People Value What Feels Rare",
+    "Your Mind Replays Moments To Learn",
+    "This Habit Creates Instant Authority",
+    "You Feel Anxious When The Brain Predicts Risk",
+    "People Like You More When You Do Less",
+    "Your Brain Saves Energy With Shortcuts",
+    "This Behavior Builds Trust Quickly",
+    "You Feel Jealous Because Of Comparison Instinct",
+    "The Brain Notices Changes Immediately",
+    "People Remember Feelings Over Facts",
+    "This Small Pause Changes Conversations",
+    "You Connect Faster Through Shared Emotion",
+    "Your Mind Prefers Familiar Pain",
+    "People Reveal Intentions Under Pressure",
+    "This Makes You Seem More Confident",
+    "Your Brain Detects Social Hierarchy Fast",
+    "You Think About Them For This Reason",
+    "The Brain Protects Your Self Image",
+    "People Follow Calm Individuals Naturally"
 ]
+
 
 
 # List 2: Captions (Har bar inme se koi ek randomly select hoga)
 CAPTIONS_GRID = [
-"Bas share karna tha ❤️"
+    "Watch till the end.",
+    "You needed to hear this today.",
+    "Most people never realize this.",
+    "Save this for later.",
+    "This changes how you see people.",
+    "Your brain already noticed it.",
+    "Now it makes sense.",
+    "Read that again.",
+    "You’ve experienced this before.",
+    "Nobody talks about this.",
+    "Think about it carefully.",
+    "This explains a lot.",
+    "You’ll notice it everywhere now.",
+    "It was always there.",
+    "Your mind remembers this.",
+    "This is not random.",
+    "People do this unconsciously.",
+    "You feel it but ignore it.",
+    "Your instincts were right.",
+    "Pay attention next time.",
+    "You can’t unsee this now.",
+    "Your brain connects patterns.",
+    "This reveals true intentions.",
+    "You’ve felt this before.",
+    "Your reactions have meaning.",
+    "It happens more than you think.",
+    "Observe quietly.",
+    "There’s always a reason.",
+    "Human behavior repeats.",
+    "This explains their actions.",
+    "Notice the small details.",
+    "The mind protects itself.",
+    "Emotions leave clues.",
+    "Your brain reacts instantly.",
+    "The silence says enough.",
+    "Patterns never lie.",
+    "Trust observation over words.",
+    "The brain avoids discomfort.",
+    "You sensed it immediately.",
+    "Nothing here is accidental.",
+    "Behavior shows truth.",
+    "You already knew this.",
+    "This affects relationships.",
+    "Watch people carefully.",
+    "The answer is subtle.",
+    "Psychology is everywhere.",
+    "Your perception shifts now.",
+    "Understanding changes reactions.",
+    "People reveal themselves slowly.",
+    "This changes conversations.",
+    "Rewatch and notice more.",
+    "You’ll remember this later.",
+    "The brain prefers familiarity.",
+    "Awareness changes everything.",
+    "Think deeper.",
+    "Small signs matter.",
+    "Your intuition picked it up.",
+    "Now you understand why.",
+    "Observe before reacting.",
+    "Human nature is predictable.",
+    "It’s always in the details.",
+    "Perception shapes reality.",
+    "You saw the sign.",
+    "This explains the feeling.",
+    "Now watch people again.",
+    "Silence reveals intention.",
+    "Understanding people is power."
 ]
 
 
@@ -44,20 +178,20 @@ INSTA_HASHTAGS = """
 .
 .
 .
-"#viral #fyp #trending #explorepage #ytshorts"
+"#psychologyfacts #humanbehavior #mindset #selfimprovement #psychologytricks"
 """
 YOUTUBE_HASHTAGS = """
 .
 .
 .
-"#youtubeshorts #youtube #shorts #subscribe #viralshorts"
+" #psychologyfacts #humanbehavior #mindset #selfimprovement #brainfacts #psychologytricks #socialskills #shorts #youtubeshorts #youtubeshorts #youtube #shorts #subscribe #viralshorts"
 """
 
 FACEBOOK_HASHTAGS = """
 .
 .
 .
-"#facebookreels #fb #reelsvideo #viralreels #fbreels"
+"#psychologyfacts #humanbehavior #mindset #selfimprovement #learnsomethingnew #factsdaily #socialskills #personality #brainfacts"
 """
 
 # --- HELPER FUNCTIONS ---
