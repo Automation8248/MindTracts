@@ -5,7 +5,8 @@ import requests
 import datetime
 import cloudinary
 import cloudinary.api
-import cloudinary.uploader 
+import cloudinary.uploader
+from cloudinary.search import Search # Naya module folder search ke liye
 
 # --- CONFIGURATION ---
 HISTORY_FILE = "history.json"
@@ -67,8 +68,11 @@ FACEBOOK_HASHTAGS = """
 def load_history():
     if not os.path.exists(HISTORY_FILE):
         return []
-    with open(HISTORY_FILE, 'r') as f:
-        return json.load(f)
+    try:
+        with open(HISTORY_FILE, 'r') as f:
+            return json.load(f)
+    except:
+        return [] # Agar JSON me koi error ho toh crash hone se bachayega
 
 def save_history(data):
     with open(HISTORY_FILE, 'w') as f:
@@ -84,10 +88,14 @@ def run_automation():
     
     print("Checking for 15-day expired videos...")
     for entry in history:
+        # Puraane records ko error dene se bachane ke liye
+        if 'date_sent' not in entry:
+            continue
+            
         sent_date = datetime.date.fromisoformat(entry['date_sent'])
         days_diff = (today - sent_date).days
         
-        # Agar 15 din ya usse zyada ho gaye hain, toh Cloudinary se permanent delete kar do
+        # Agar 15 din ho gaye hain, toh Cloudinary se permanent delete kar do
         if days_diff >= 15:
             try:
                 public_id_to_delete = entry['filename']
@@ -102,25 +110,28 @@ def run_automation():
     history = new_history 
 
     # 2. FETCH VIDEOS FROM CLOUDINARY
-    print("Fetching available videos from Cloudinary...")
+    print(f"Fetching available videos from Cloudinary folder: '{CLOUDINARY_FOLDER}'...")
     try:
-        response = cloudinary.api.resources(
-            type="upload",
-            resource_type="video",
-            prefix=f"{CLOUDINARY_FOLDER}/",
-            max_results=500 
-        )
+        # Search API ka use (Yeh best method hai folder se fetch karne ka)
+        response = cloudinary.Search().expression(f"folder:{CLOUDINARY_FOLDER}").resource_type("video").max_results(500).execute()
         all_videos = response.get('resources', [])
+        
+        print(f"DEBUG: Total videos found in Cloudinary: {len(all_videos)}")
+        for v in all_videos:
+             print(f" - Found ID: {v['public_id']}")
+             
     except Exception as e:
         print(f"Cloudinary Fetch Error: {e}")
         return
 
     sent_filenames = [entry['filename'] for entry in history]
+    print(f"DEBUG: Videos already in history.json: {len(sent_filenames)}")
     
     available_videos = [v for v in all_videos if v['public_id'] not in sent_filenames]
     
     if not available_videos:
         print("No new videos to send from Cloudinary.")
+        print("Hint: Ya toh 'videos' folder khali hai, ya saare videos already history.json me send ho chuke hain.")
         return
 
     selected_video_data = random.choice(available_videos)
@@ -134,9 +145,6 @@ def run_automation():
     selected_title = random.choice(TITLES_GRID)
     selected_caption = random.choice(CAPTIONS_GRID)
     
-    print(f"Generated Title: {selected_title}")
-    print(f"Generated Caption: {selected_caption}")
-
     # 4. SEND TO TELEGRAM
     if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
         print("Sending to Telegram...")
@@ -154,11 +162,11 @@ def run_automation():
         }
         
         try:
-            response = requests.post(url, data=payload)
-            if response.status_code == 200:
+            res = requests.post(url, data=payload)
+            if res.status_code == 200:
                 print("Successfully sent to Telegram.")
             else:
-                print(f"Telegram API Response Error: {response.text}")
+                print(f"Telegram API Response Error: {res.text}")
         except Exception as e:
             print(f"Telegram Request Error: {e}")
 
@@ -177,8 +185,8 @@ def run_automation():
             "source": "AffiliateBot"
         }
         try:
-            response = requests.post(WEBHOOK_URL, json=webhook_data)
-            print(f"Webhook Sent. Status: {response.status_code}")
+            res = requests.post(WEBHOOK_URL, json=webhook_data)
+            print(f"Webhook Sent. Status: {res.status_code}")
         except Exception as e:
             print(f"Webhook Error: {e}")
 
