@@ -16,7 +16,7 @@ WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 # Aapka fixed cloud name jo backup ki tarah kaam karega
 DEFAULT_CLOUD_NAME = "dwrjs3cgz"
 
-# Cloudinary Configuration with Auto-Fix Logic
+# Cloudinary Configuration
 cloud_name_env = os.environ.get("CLOUDINARY_CLOUD_NAME")
 final_cloud_name = cloud_name_env if cloud_name_env and "***" not in cloud_name_env else DEFAULT_CLOUD_NAME
 
@@ -67,75 +67,89 @@ def run_automation():
     
     # 1. DELETE EXPIRED (15 Days Logic)
     for entry in history:
-        if 'date_sent' not in entry:
-            continue
+        if 'date_sent' not in entry: continue
         sent_date = datetime.date.fromisoformat(entry['date_sent'])
         if (today - sent_date).days >= 15:
             try:
                 cloudinary.uploader.destroy(entry['filename'], resource_type="video")
-            except:
-                pass
+            except: pass
         else:
             new_history.append(entry)
     
     save_history(new_history)
 
-    # 2. FETCH FROM FOLDER
+    # 2. FETCH FROM FOLDER (SMART FETCH WAPAS ADD KIYA HAI)
     try:
         response = cloudinary.api.resources(type="upload", resource_type="video", max_results=500)
-        all_videos = [v for v in response.get('resources', []) if v['public_id'].startswith(f"{CLOUDINARY_FOLDER}/")]
+        raw_videos = response.get('resources', [])
+        
+        all_videos = []
+        for v in raw_videos:
+            # Ye logic videos ko 100% dhoondh lega
+            if v.get('folder') == CLOUDINARY_FOLDER or v.get('asset_folder') == CLOUDINARY_FOLDER or v['public_id'].startswith(f"{CLOUDINARY_FOLDER}/"):
+                all_videos.append(v)
+                
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Cloudinary Fetch Error: {e}")
         return
 
     sent_filenames = [entry['filename'] for entry in new_history]
     available_videos = [v for v in all_videos if v['public_id'] not in sent_filenames]
     
     if not available_videos:
-        print("No new videos.")
+        print("No new videos available in folder.")
         return
 
     selected = random.choice(available_videos)
     video_id = selected['public_id']
     
-    # 🌟 FIX: Folder name ko URL path mein sahi jagah rakha gaya hai
-    # Yahan par bhi auto-fix logic add kiya gaya hai
-    cloud_name_env_local = os.environ.get("CLOUDINARY_CLOUD_NAME")
-    safe_cloud_name = cloud_name_env_local if cloud_name_env_local and "***" not in cloud_name_env_local else DEFAULT_CLOUD_NAME
+    # 3. LINK GENERATION & AUTO-FIX
+    # Cloudinary ka original secure URL lenge taaki link ekdum perfect ho
+    direct_download_url = selected['secure_url']
     
-    direct_download_url = f"https://res.cloudinary.com/{safe_cloud_name}/video/upload/{video_id}.mp4"
-    
-    # Ek final check, agar URL me fir bhi *** reh gaya ho
+    # Agar link mein '***' hai, toh usko 'dwrjs3cgz' se theek kar dega
     if "***" in direct_download_url:
         direct_download_url = direct_download_url.replace("***", DEFAULT_CLOUD_NAME)
-    
-    print(f"Direct Link: {direct_download_url}")
 
-    # 3. SEND DATA
+    print(f"Selected Video ID: {video_id}")
+    print(f"Final Working Link: {direct_download_url}")
+
+    # 4. SEND TO TELEGRAM
     if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
         ist_now = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
         time_string = ist_now.strftime("%d %b %I:%M:%S %p %Y").upper()
-        requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo", data={
+        payload = {
             'chat_id': TELEGRAM_CHAT_ID, 
             'caption': f"<b>{time_string}</b>",
             'parse_mode': 'HTML',
             'video': direct_download_url
-        })
+        }
+        try:
+            requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo", data=payload)
+        except Exception as e:
+            print(f"Telegram Error: {e}")
 
+    # 5. SEND TO WEBHOOK
     if WEBHOOK_URL:
-        requests.post(WEBHOOK_URL, json={
+        webhook_payload = {
             "video_url": direct_download_url,
             "title": random.choice(TITLES_GRID),
             "caption": random.choice(CAPTIONS_GRID),
             "hashtags": FIXED_HASHTAGS,
             "insta_hashtags": INSTA_HASHTAGS,
             "youtube_hashtags": YOUTUBE_HASHTAGS,
-            "facebook_hashtags": FACEBOOK_HASHTAGS
-        })
+            "facebook_hashtags": FACEBOOK_HASHTAGS,
+            "source": "AffiliateBot"
+        }
+        try:
+            requests.post(WEBHOOK_URL, json=webhook_payload)
+        except Exception as e:
+            print(f"Webhook Error: {e}")
 
-    # 4. UPDATE HISTORY
+    # 6. UPDATE HISTORY
     new_history.append({"filename": video_id, "date_sent": today.isoformat()})
     save_history(new_history)
+    print("Automation Done Successfully!")
 
 if __name__ == "__main__":
     run_automation()
