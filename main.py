@@ -5,6 +5,7 @@ import requests
 import datetime
 import cloudinary
 import cloudinary.api
+import cloudinary.uploader # Delete karne ke liye iski zaroorat padegi
 
 # --- CONFIGURATION ---
 HISTORY_FILE = "history.json"
@@ -12,7 +13,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 
-# Cloudinary Configuration (Environment variables se credentials le rahe hain)
+# Cloudinary Configuration
 cloudinary.config( 
   cloud_name = os.environ.get("CLOUDINARY_CLOUD_NAME"), 
   api_key = os.environ.get("CLOUDINARY_API_KEY"), 
@@ -20,22 +21,18 @@ cloudinary.config(
   secure = True
 )
 
-# Cloudinary mein aapke us folder ka naam jismein videos hain
 CLOUDINARY_FOLDER = "videos" 
 
 # --- DATA GRID (Pre-saved Titles & Captions) ---
 
-# List 1: Titles (Har bar inme se koi ek randomly select hoga)
 TITLES_GRID = [
 "Aaj kuch unexpected ho gaya…"
 ]
 
-# List 2: Captions (Har bar inme se koi ek randomly select hoga)
 CAPTIONS_GRID = [
 "Bas share karna tha ❤️"
 ]
 
-# List 3: Fixed Hashtags (Ye har video me SAME rahega)
 FIXED_HASHTAGS = """
 .
 .
@@ -80,19 +77,25 @@ def save_history(data):
 # --- MAIN LOGIC ---
 
 def run_automation():
-    # 1. CLEAN HISTORY (15 Days Logic)
+    # 1. DELETE EXPIRED VIDEOS FROM CLOUDINARY (15 Days Logic)
     history = load_history()
     today = datetime.date.today()
     new_history = []
     
-    print("Checking history for 15-day reset...")
+    print("Checking for 15-day expired videos...")
     for entry in history:
         sent_date = datetime.date.fromisoformat(entry['date_sent'])
         days_diff = (today - sent_date).days
         
-        # Ab hum file delete nahi kar rahe, bas history se hata rahe hain taaki 15 din baad video reuse ho sake
+        # Agar 15 din ya usse zyada ho gaye hain, toh Cloudinary se Delete kar do
         if days_diff >= 15:
-            print(f"CLEARED FROM HISTORY (15 days old): {entry['filename']}")
+            try:
+                public_id_to_delete = entry['filename']
+                # Cloudinary se permanent delete karne ki API call
+                result = cloudinary.uploader.destroy(public_id_to_delete, resource_type="video")
+                print(f"DELETED EXPIRED FROM CLOUDINARY: {public_id_to_delete} - Status: {result.get('result')}")
+            except Exception as e:
+                print(f"Error deleting video {entry['filename']} from Cloudinary: {e}")
         else:
             new_history.append(entry)
     
@@ -100,9 +103,8 @@ def run_automation():
     history = new_history 
 
     # 2. FETCH VIDEOS FROM CLOUDINARY
-    print("Fetching videos from Cloudinary...")
+    print("Fetching available videos from Cloudinary...")
     try:
-        # Fetching up to 500 videos from the specified folder
         response = cloudinary.api.resources(
             type="upload",
             resource_type="video",
@@ -116,17 +118,15 @@ def run_automation():
 
     sent_filenames = [entry['filename'] for entry in history]
     
-    # Cloudinary response mein 'public_id' hota hai (jismein folder name bhi shamil hota hai)
     available_videos = [v for v in all_videos if v['public_id'] not in sent_filenames]
     
     if not available_videos:
         print("No new videos to send from Cloudinary.")
         return
 
-    # Pick a random video dict
     selected_video_data = random.choice(available_videos)
     video_to_send_id = selected_video_data['public_id']
-    video_url = selected_video_data['secure_url'] # Ye direct link hum use karenge
+    video_url = selected_video_data['secure_url'] 
     
     print(f"Selected Video ID: {video_to_send_id}")
     print(f"Video URL: {video_url}")
@@ -141,19 +141,12 @@ def run_automation():
     # 4. SEND TO TELEGRAM
     if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
         print("Sending to Telegram...")
-        
-        # Server time ko automatically Indian Standard Time (IST) mein convert karna
         ist_now = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
-        
-        # Format: DD MONTH HH:MM:SS AM/PM YYYY aur sabko CAPITAL karna
         time_string = ist_now.strftime("%d %b %I:%M:%S %p %Y").upper()
-        
-        # Sirf bold date aur time, koi title/hashtag nahi
         telegram_caption = f"<b>{time_string}</b>"
 
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
         
-        # Telegram direct video URL accept karta hai, toh hume download karke send karne ki zaroorat nahi hai
         payload = {
             'chat_id': TELEGRAM_CHAT_ID, 
             'caption': telegram_caption,
@@ -175,7 +168,7 @@ def run_automation():
         print("Sending to Webhook...")
         
         webhook_data = {
-            "video_url": video_url, # Seedha Cloudinary ka secure URL send kar rahe hain
+            "video_url": video_url,
             "title": selected_title,
             "caption": selected_caption,
             "hashtags": FIXED_HASHTAGS,
