@@ -80,7 +80,7 @@ def save_history(data):
 # --- MAIN LOGIC ---
 
 def run_automation():
-    # 1. DELETE EXPIRED VIDEOS FROM CLOUDINARY (15 Days Logic)
+    # 1. DELETE EXPIRED VIDEOS FROM CLOUDINARY
     history = load_history()
     today = datetime.date.today()
     new_history = []
@@ -106,28 +106,32 @@ def run_automation():
     save_history(new_history)
     history = new_history 
 
-    # 2. FETCH VIDEOS FROM CLOUDINARY
-    print(f"Fetching available videos from Cloudinary folder: '{CLOUDINARY_FOLDER}'...")
+    # 2. FETCH VIDEOS FROM CLOUDINARY (SMART FETCH)
+    print("Fetching videos from Cloudinary...")
     try:
-        # Stable Method Use Kar Rahe Hain
+        # Pura account search karega taaki koi path miss na ho
         response = cloudinary.api.resources(
             type="upload",
             resource_type="video",
-            prefix=f"{CLOUDINARY_FOLDER}/",
             max_results=500 
         )
-        all_videos = response.get('resources', [])
+        raw_videos = response.get('resources', [])
+        print(f"DEBUG: Raw videos found in entire account: {len(raw_videos)}")
         
-        print(f"DEBUG: Total videos found in Cloudinary: {len(all_videos)}")
-        for v in all_videos:
-             print(f" - Found ID: {v['public_id']}")
-             
+        all_videos = []
+        for v in raw_videos:
+            # Check karega ki kya ye 'videos' folder me hai (Visual ya API path dono tarike se)
+            if v.get('asset_folder') == CLOUDINARY_FOLDER or v['public_id'].startswith(f"{CLOUDINARY_FOLDER}/"):
+                all_videos.append(v)
+                print(f" - Matched Video ID: {v['public_id']}")
+                
+        print(f"DEBUG: Videos successfully matched to '{CLOUDINARY_FOLDER}' folder: {len(all_videos)}")
+
     except Exception as e:
         print(f"Cloudinary Fetch Error: {e}")
         return
 
     sent_filenames = [entry['filename'] for entry in history]
-    print(f"DEBUG: Videos already in history.json: {len(sent_filenames)}")
     
     available_videos = [v for v in all_videos if v['public_id'] not in sent_filenames]
     
