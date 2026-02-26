@@ -6,7 +6,6 @@ import datetime
 import cloudinary
 import cloudinary.api
 import cloudinary.uploader
-import cloudinary.utils # Naya tool add kiya hai link ko perfect banane ke liye
 
 # --- CONFIGURATION ---
 HISTORY_FILE = "history.json"
@@ -110,17 +109,14 @@ def run_automation():
 
     selected_video_data = random.choice(available_videos)
     video_to_send_id = selected_video_data['public_id']
+    cloud_name = os.environ.get("CLOUDINARY_CLOUD_NAME")
     
-    # 🌟 YAHAN FIX KIYA HAI: Browser-friendly webhook link generate karna
-    video_url, _ = cloudinary.utils.cloudinary_url(
-        video_to_send_id, 
-        resource_type="video", 
-        format="mp4", # Ensure karega ki last me .mp4 ho
-        secure=True   # Ensure karega ki https:// wala secure link ho
-    )
+    # 🌟 YAHAN HAI MAIN JAADU: 100% Direct Download Link 🌟
+    # Yeh link browser aur sabhi downloading pipelines ke liye perfectly kaam karega
+    direct_download_url = f"https://res.cloudinary.com/{cloud_name}/video/upload/{video_to_send_id}.mp4"
     
     print(f"Selected Video ID: {video_to_send_id}")
-    print(f"Perfect Webhook Video URL: {video_url}")
+    print(f"Direct Download URL: {direct_download_url}")
 
     selected_title = random.choice(TITLES_GRID)
     selected_caption = random.choice(CAPTIONS_GRID)
@@ -136,7 +132,7 @@ def run_automation():
             'chat_id': TELEGRAM_CHAT_ID, 
             'caption': telegram_caption,
             'parse_mode': 'HTML',
-            'video': video_url 
+            'video': direct_download_url  # Telegram ko bhi yahi link jayega
         }
         try:
             requests.post(url, data=payload)
@@ -147,7 +143,7 @@ def run_automation():
     if WEBHOOK_URL:
         print("Sending to Webhook...")
         webhook_data = {
-            "video_url": video_url,
+            "video_url": direct_download_url,  # Webhook ko finally yahi direct download link milega
             "title": selected_title,
             "caption": selected_caption,
             "hashtags": FIXED_HASHTAGS,
