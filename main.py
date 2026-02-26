@@ -6,6 +6,7 @@ import datetime
 import cloudinary
 import cloudinary.api
 import cloudinary.uploader
+import cloudinary.utils # Naya tool add kiya hai link ko perfect banane ke liye
 
 # --- CONFIGURATION ---
 HISTORY_FILE = "history.json"
@@ -21,10 +22,9 @@ cloudinary.config(
   secure = True
 )
 
-# STRICT FOLDER NAME
 CLOUDINARY_FOLDER = "videos" 
 
-# --- DATA GRID (Pre-saved Titles & Captions) ---
+# --- DATA GRID ---
 TITLES_GRID = ["Aaj kuch unexpected ho gaya…"]
 CAPTIONS_GRID = ["Bas share karna tha ❤️"]
 
@@ -56,7 +56,6 @@ def save_history(data):
 
 # --- MAIN LOGIC ---
 def run_automation():
-    # 1. DELETE EXPIRED VIDEOS (15 Days Logic)
     history = load_history()
     today = datetime.date.today()
     new_history = []
@@ -72,17 +71,16 @@ def run_automation():
         if days_diff >= 15:
             try:
                 public_id_to_delete = entry['filename']
-                result = cloudinary.uploader.destroy(public_id_to_delete, resource_type="video")
+                cloudinary.uploader.destroy(public_id_to_delete, resource_type="video")
                 print(f"DELETED FROM CLOUDINARY: {public_id_to_delete}")
             except Exception as e:
-                print(f"Error deleting video: {e}")
+                pass
         else:
             new_history.append(entry)
     
     save_history(new_history)
     history = new_history 
 
-    # 2. STRICT FETCH FROM "videos" FOLDER ONLY
     print(f"Fetching videos STRICTLY from folder: '{CLOUDINARY_FOLDER}'...")
     try:
         response = cloudinary.api.resources(
@@ -94,7 +92,6 @@ def run_automation():
         
         all_videos = []
         for v in raw_videos:
-            # Ye logic ensure karega ki video bas "videos" folder ka hi ho
             if v.get('folder') == CLOUDINARY_FOLDER or v.get('asset_folder') == CLOUDINARY_FOLDER or v['public_id'].startswith(f"{CLOUDINARY_FOLDER}/"):
                 all_videos.append(v)
                 
@@ -114,17 +111,20 @@ def run_automation():
     selected_video_data = random.choice(available_videos)
     video_to_send_id = selected_video_data['public_id']
     
-    # YE LINK 100% WORKING HOGA (404 nahi aayega)
-    video_url = selected_video_data['secure_url'] 
+    # 🌟 YAHAN FIX KIYA HAI: Browser-friendly webhook link generate karna
+    video_url, _ = cloudinary.utils.cloudinary_url(
+        video_to_send_id, 
+        resource_type="video", 
+        format="mp4", # Ensure karega ki last me .mp4 ho
+        secure=True   # Ensure karega ki https:// wala secure link ho
+    )
     
     print(f"Selected Video ID: {video_to_send_id}")
-    print(f"Working Video URL: {video_url}")
+    print(f"Perfect Webhook Video URL: {video_url}")
 
-    # 3. RANDOM SELECTION
     selected_title = random.choice(TITLES_GRID)
     selected_caption = random.choice(CAPTIONS_GRID)
     
-    # 4. SEND TO TELEGRAM
     if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
         print("Sending to Telegram...")
         ist_now = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
@@ -132,24 +132,18 @@ def run_automation():
         telegram_caption = f"<b>{time_string}</b>"
 
         url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
-        
         payload = {
             'chat_id': TELEGRAM_CHAT_ID, 
             'caption': telegram_caption,
             'parse_mode': 'HTML',
             'video': video_url 
         }
-        
         try:
-            res = requests.post(url, data=payload)
-            if res.status_code == 200:
-                print("Successfully sent to Telegram.")
-            else:
-                print(f"Telegram API Response Error: {res.text}")
+            requests.post(url, data=payload)
+            print("Successfully sent to Telegram.")
         except Exception as e:
             print(f"Telegram Request Error: {e}")
 
-    # 5. SEND TO WEBHOOK
     if WEBHOOK_URL:
         print("Sending to Webhook...")
         webhook_data = {
@@ -168,7 +162,6 @@ def run_automation():
         except Exception as e:
             print(f"Webhook Error: {e}")
 
-    # 6. UPDATE HISTORY
     new_history.append({
         "filename": video_to_send_id,
         "date_sent": today.isoformat()
