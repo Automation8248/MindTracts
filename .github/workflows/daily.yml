@@ -1,46 +1,46 @@
-name: Daily Video Bot
+name: Cloudinary Video Automation
 
 on:
   schedule:
-    # India (IST): 6:00 AM (Today)
-    # New York (EST): 7:30 PM (Yesterday)
-    # UTC (GitHub Time): 12:30 AM (00:30)
-    - cron: '30 0 * * *'
-  workflow_dispatch:
-  
-permissions:
-  contents: write         # Write permission zaroori hai delete/update ke liye
+    # Ye workflow har 4 ghante me chalega. Aap isko apne hisaab se change kar sakte hain.
+    - cron: '0 */4 * * *' 
+  workflow_dispatch: # Isse aap GitHub actions tab se manually bhi run kar payenge
 
 jobs:
   run-automation:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write # history.json ko wapas commit karne ke liye zaroori hai
+
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
 
-      - name: Install Libraries
-        run: pip install requests
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install requests cloudinary
 
-      - name: Run Main Script
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        run: python main.py
+    - name: Run Main Script
+      env:
+        TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+        CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+        CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+      run: python main.py
 
-      - name: Commit & Push Changes
-        run: |
-          git config --global user.name "Auto Bot"
-          git config --global user.email "bot@noreply.github.com"
-          
-          # Add changes (History update & Deleted videos)
-          git add -A
-          
-          # Commit only if there are changes
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Automated: Processed & Deleted old videos" && git push)
+    - name: Commit and Push history.json
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add history.json
+        # Agar history.json me koi change hua hai, tabhi commit aur push karega
+        git diff --quiet && git diff --staged --quiet || (git commit -m "Updated history.json automatically" && git push)
