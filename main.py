@@ -6,7 +6,6 @@ import datetime
 import cloudinary
 import cloudinary.api
 import cloudinary.uploader
-from cloudinary.search import Search # Naya module folder search ke liye
 
 # --- CONFIGURATION ---
 HISTORY_FILE = "history.json"
@@ -72,7 +71,7 @@ def load_history():
         with open(HISTORY_FILE, 'r') as f:
             return json.load(f)
     except:
-        return [] # Agar JSON me koi error ho toh crash hone se bachayega
+        return []
 
 def save_history(data):
     with open(HISTORY_FILE, 'w') as f:
@@ -88,14 +87,12 @@ def run_automation():
     
     print("Checking for 15-day expired videos...")
     for entry in history:
-        # Puraane records ko error dene se bachane ke liye
         if 'date_sent' not in entry:
             continue
             
         sent_date = datetime.date.fromisoformat(entry['date_sent'])
         days_diff = (today - sent_date).days
         
-        # Agar 15 din ho gaye hain, toh Cloudinary se permanent delete kar do
         if days_diff >= 15:
             try:
                 public_id_to_delete = entry['filename']
@@ -112,8 +109,13 @@ def run_automation():
     # 2. FETCH VIDEOS FROM CLOUDINARY
     print(f"Fetching available videos from Cloudinary folder: '{CLOUDINARY_FOLDER}'...")
     try:
-        # Search API ka use (Yeh best method hai folder se fetch karne ka)
-        response = cloudinary.Search().expression(f"folder:{CLOUDINARY_FOLDER}").resource_type("video").max_results(500).execute()
+        # Stable Method Use Kar Rahe Hain
+        response = cloudinary.api.resources(
+            type="upload",
+            resource_type="video",
+            prefix=f"{CLOUDINARY_FOLDER}/",
+            max_results=500 
+        )
         all_videos = response.get('resources', [])
         
         print(f"DEBUG: Total videos found in Cloudinary: {len(all_videos)}")
@@ -131,7 +133,6 @@ def run_automation():
     
     if not available_videos:
         print("No new videos to send from Cloudinary.")
-        print("Hint: Ya toh 'videos' folder khali hai, ya saare videos already history.json me send ho chuke hain.")
         return
 
     selected_video_data = random.choice(available_videos)
@@ -141,7 +142,7 @@ def run_automation():
     print(f"Selected Video ID: {video_to_send_id}")
     print(f"Video URL: {video_url}")
 
-    # 3. RANDOM SELECTION (Grid System)
+    # 3. RANDOM SELECTION
     selected_title = random.choice(TITLES_GRID)
     selected_caption = random.choice(CAPTIONS_GRID)
     
