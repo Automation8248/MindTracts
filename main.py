@@ -21,17 +21,12 @@ cloudinary.config(
   secure = True
 )
 
+# STRICT FOLDER NAME
 CLOUDINARY_FOLDER = "videos" 
 
 # --- DATA GRID (Pre-saved Titles & Captions) ---
-
-TITLES_GRID = [
-"Aaj kuch unexpected ho gaya…"
-]
-
-CAPTIONS_GRID = [
-"Bas share karna tha ❤️"
-]
+TITLES_GRID = ["Aaj kuch unexpected ho gaya…"]
+CAPTIONS_GRID = ["Bas share karna tha ❤️"]
 
 FIXED_HASHTAGS = """
 .
@@ -41,29 +36,11 @@ FIXED_HASHTAGS = """
 .
 #viral #trending #fyp #foryou #reels #short #shorts #ytshorts #explore #explorepage #viralvideo #trend #newvideo #content #creator #dailycontent #entertainment #fun #interesting #watchtillend #mustwatch #reality #real #moment #life #daily #people #reaction #vibes #share #support"""
 
-INSTA_HASHTAGS = """
-.
-.
-.
-.
-"#viral #fyp #trending #explorepage #ytshorts"
-"""
-YOUTUBE_HASHTAGS = """
-.
-.
-.
-"#youtubeshorts #youtube #shorts #subscribe #viralshorts"
-"""
-
-FACEBOOK_HASHTAGS = """
-.
-.
-.
-"#facebookreels #fb #reelsvideo #viralreels #fbreels"
-"""
+INSTA_HASHTAGS = """\n.\n.\n.\n.\n"#viral #fyp #trending #explorepage #ytshorts"\n"""
+YOUTUBE_HASHTAGS = """\n.\n.\n.\n"#youtubeshorts #youtube #shorts #subscribe #viralshorts"\n"""
+FACEBOOK_HASHTAGS = """\n.\n.\n.\n"#facebookreels #fb #reelsvideo #viralreels #fbreels"\n"""
 
 # --- HELPER FUNCTIONS ---
-
 def load_history():
     if not os.path.exists(HISTORY_FILE):
         return []
@@ -78,9 +55,8 @@ def save_history(data):
         json.dump(data, f, indent=4)
 
 # --- MAIN LOGIC ---
-
 def run_automation():
-    # 1. DELETE EXPIRED VIDEOS FROM CLOUDINARY
+    # 1. DELETE EXPIRED VIDEOS (15 Days Logic)
     history = load_history()
     today = datetime.date.today()
     new_history = []
@@ -97,54 +73,52 @@ def run_automation():
             try:
                 public_id_to_delete = entry['filename']
                 result = cloudinary.uploader.destroy(public_id_to_delete, resource_type="video")
-                print(f"DELETED EXPIRED FROM CLOUDINARY: {public_id_to_delete} - Status: {result.get('result')}")
+                print(f"DELETED FROM CLOUDINARY: {public_id_to_delete}")
             except Exception as e:
-                print(f"Error deleting video {entry['filename']} from Cloudinary: {e}")
+                print(f"Error deleting video: {e}")
         else:
             new_history.append(entry)
     
     save_history(new_history)
     history = new_history 
 
-    # 2. FETCH VIDEOS FROM CLOUDINARY (SMART FETCH)
-    print("Fetching videos from Cloudinary...")
+    # 2. STRICT FETCH FROM "videos" FOLDER ONLY
+    print(f"Fetching videos STRICTLY from folder: '{CLOUDINARY_FOLDER}'...")
     try:
-        # Pura account search karega taaki koi path miss na ho
         response = cloudinary.api.resources(
             type="upload",
             resource_type="video",
             max_results=500 
         )
         raw_videos = response.get('resources', [])
-        print(f"DEBUG: Raw videos found in entire account: {len(raw_videos)}")
         
         all_videos = []
         for v in raw_videos:
-            # Check karega ki kya ye 'videos' folder me hai (Visual ya API path dono tarike se)
-            if v.get('asset_folder') == CLOUDINARY_FOLDER or v['public_id'].startswith(f"{CLOUDINARY_FOLDER}/"):
+            # Ye logic ensure karega ki video bas "videos" folder ka hi ho
+            if v.get('folder') == CLOUDINARY_FOLDER or v.get('asset_folder') == CLOUDINARY_FOLDER or v['public_id'].startswith(f"{CLOUDINARY_FOLDER}/"):
                 all_videos.append(v)
-                print(f" - Matched Video ID: {v['public_id']}")
                 
-        print(f"DEBUG: Videos successfully matched to '{CLOUDINARY_FOLDER}' folder: {len(all_videos)}")
+        print(f"DEBUG: Total videos found inside '{CLOUDINARY_FOLDER}': {len(all_videos)}")
 
     except Exception as e:
         print(f"Cloudinary Fetch Error: {e}")
         return
 
     sent_filenames = [entry['filename'] for entry in history]
-    
     available_videos = [v for v in all_videos if v['public_id'] not in sent_filenames]
     
     if not available_videos:
-        print("No new videos to send from Cloudinary.")
+        print(f"No new videos to send from '{CLOUDINARY_FOLDER}' folder.")
         return
 
     selected_video_data = random.choice(available_videos)
     video_to_send_id = selected_video_data['public_id']
+    
+    # YE LINK 100% WORKING HOGA (404 nahi aayega)
     video_url = selected_video_data['secure_url'] 
     
     print(f"Selected Video ID: {video_to_send_id}")
-    print(f"Video URL: {video_url}")
+    print(f"Working Video URL: {video_url}")
 
     # 3. RANDOM SELECTION
     selected_title = random.choice(TITLES_GRID)
@@ -178,7 +152,6 @@ def run_automation():
     # 5. SEND TO WEBHOOK
     if WEBHOOK_URL:
         print("Sending to Webhook...")
-        
         webhook_data = {
             "video_url": video_url,
             "title": selected_title,
