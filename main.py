@@ -145,4 +145,4 @@ def run_automation():
     print("Automation Done Successfully!")
 
 if __name__ == "__main__":
-    run_automation()omation()
+    run_automation()
