@@ -16,9 +16,8 @@ WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 # Aapka fixed cloud name jo backup ki tarah kaam karega
 DEFAULT_CLOUD_NAME = "dwrjs3cgz"
 
-# Cloudinary Configuration
+# Cloudinary Configuration with Auto-Fix Logic
 cloud_name_env = os.environ.get("CLOUDINARY_CLOUD_NAME")
-# Logic: Agar environment variable khali hai ya usme '***' hai, toh default use karo
 final_cloud_name = cloud_name_env if cloud_name_env and "***" not in cloud_name_env else DEFAULT_CLOUD_NAME
 
 cloudinary.config( 
@@ -42,9 +41,9 @@ FIXED_HASHTAGS = """
 .
 #viral #trending #fyp #foryou #reels #short #shorts #ytshorts #explore #explorepage #viralvideo #trend #newvideo #content #creator #dailycontent #entertainment #fun #interesting #watchtillend #mustwatch #reality #real #moment #life #daily #people #reaction #vibes #share #support"""
 
-INSTA_HASHTAGS = """\n.\n.\n.\n.\n#viral #fyp #trending #explorepage #ytshorts\n"""
-YOUTUBE_HASHTAGS = """\n.\n.\n.\n#youtubeshorts #youtube #shorts #subscribe #viralshorts\n"""
-FACEBOOK_HASHTAGS = """\n.\n.\n.\n#facebookreels #fb #reelsvideo #viralreels #fbreels\n"""
+INSTA_HASHTAGS = """\n.\n.\n.\n.\n"#viral #fyp #trending #explorepage #ytshorts"\n"""
+YOUTUBE_HASHTAGS = """\n.\n.\n.\n"#youtubeshorts #youtube #shorts #subscribe #viralshorts"\n"""
+FACEBOOK_HASHTAGS = """\n.\n.\n.\n"#facebookreels #fb #reelsvideo #viralreels #fbreels"\n"""
 
 # --- HELPER FUNCTIONS ---
 def load_history():
@@ -68,81 +67,75 @@ def run_automation():
     
     # 1. DELETE EXPIRED (15 Days Logic)
     for entry in history:
-        if 'date_sent' not in entry: continue
+        if 'date_sent' not in entry:
+            continue
         sent_date = datetime.date.fromisoformat(entry['date_sent'])
         if (today - sent_date).days >= 15:
             try:
                 cloudinary.uploader.destroy(entry['filename'], resource_type="video")
-            except: pass
+            except:
+                pass
         else:
             new_history.append(entry)
     
     save_history(new_history)
 
-    # 2. FETCH FROM CLOUDINARY
+    # 2. FETCH FROM FOLDER
     try:
         response = cloudinary.api.resources(type="upload", resource_type="video", max_results=500)
-        # Sirf "videos" folder se hi videos lega
         all_videos = [v for v in response.get('resources', []) if v['public_id'].startswith(f"{CLOUDINARY_FOLDER}/")]
     except Exception as e:
-        print(f"Cloudinary Fetch Error: {e}")
+        print(f"Error: {e}")
         return
 
     sent_filenames = [entry['filename'] for entry in new_history]
     available_videos = [v for v in all_videos if v['public_id'] not in sent_filenames]
     
     if not available_videos:
-        print("No new videos available in folder.")
+        print("No new videos.")
         return
 
     selected = random.choice(available_videos)
     video_id = selected['public_id']
     
-    # 🌟 AUTO-FIX LOGIC: Agar link mein '***' aata hai toh use 'dwrjs3cgz' se replace kar dega
-    direct_download_url = f"https://res.cloudinary.com/{final_cloud_name}/video/upload/{video_id}.mp4"
+    # 🌟 FIX: Folder name ko URL path mein sahi jagah rakha gaya hai
+    # Yahan par bhi auto-fix logic add kiya gaya hai
+    cloud_name_env_local = os.environ.get("CLOUDINARY_CLOUD_NAME")
+    safe_cloud_name = cloud_name_env_local if cloud_name_env_local and "***" not in cloud_name_env_local else DEFAULT_CLOUD_NAME
     
-    # Double check replacement
+    direct_download_url = f"https://res.cloudinary.com/{safe_cloud_name}/video/upload/{video_id}.mp4"
+    
+    # Ek final check, agar URL me fir bhi *** reh gaya ho
     if "***" in direct_download_url:
         direct_download_url = direct_download_url.replace("***", DEFAULT_CLOUD_NAME)
+    
+    print(f"Direct Link: {direct_download_url}")
 
-    print(f"Final Working Link: {direct_download_url}")
-
-    # 3. SEND TO TELEGRAM
+    # 3. SEND DATA
     if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
         ist_now = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
         time_string = ist_now.strftime("%d %b %I:%M:%S %p %Y").upper()
-        payload = {
+        requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo", data={
             'chat_id': TELEGRAM_CHAT_ID, 
             'caption': f"<b>{time_string}</b>",
             'parse_mode': 'HTML',
             'video': direct_download_url
-        }
-        try:
-            requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo", data=payload)
-        except Exception as e:
-            print(f"Telegram Error: {e}")
+        })
 
-    # 4. SEND TO WEBHOOK
     if WEBHOOK_URL:
-        webhook_payload = {
+        requests.post(WEBHOOK_URL, json={
             "video_url": direct_download_url,
             "title": random.choice(TITLES_GRID),
             "caption": random.choice(CAPTIONS_GRID),
             "hashtags": FIXED_HASHTAGS,
             "insta_hashtags": INSTA_HASHTAGS,
             "youtube_hashtags": YOUTUBE_HASHTAGS,
-            "facebook_hashtags": FACEBOOK_HASHTAGS,
-            "source": "AffiliateBot"
-        }
-        try:
-            requests.post(WEBHOOK_URL, json=webhook_payload)
-        except Exception as e:
-            print(f"Webhook Error: {e}")
+            "facebook_hashtags": FACEBOOK_HASHTAGS
+        })
 
-    # 5. UPDATE HISTORY
+    # 4. UPDATE HISTORY
     new_history.append({"filename": video_id, "date_sent": today.isoformat()})
     save_history(new_history)
-    print("Automation Done Successfully!")
 
 if __name__ == "__main__":
     run_automation()
