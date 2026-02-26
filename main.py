@@ -5,7 +5,7 @@ import requests
 import datetime
 import cloudinary
 import cloudinary.api
-import cloudinary.uploader # Delete karne ke liye iski zaroorat padegi
+import cloudinary.uploader 
 
 # --- CONFIGURATION ---
 HISTORY_FILE = "history.json"
@@ -87,11 +87,10 @@ def run_automation():
         sent_date = datetime.date.fromisoformat(entry['date_sent'])
         days_diff = (today - sent_date).days
         
-        # Agar 15 din ya usse zyada ho gaye hain, toh Cloudinary se Delete kar do
+        # Agar 15 din ya usse zyada ho gaye hain, toh Cloudinary se permanent delete kar do
         if days_diff >= 15:
             try:
                 public_id_to_delete = entry['filename']
-                # Cloudinary se permanent delete karne ki API call
                 result = cloudinary.uploader.destroy(public_id_to_delete, resource_type="video")
                 print(f"DELETED EXPIRED FROM CLOUDINARY: {public_id_to_delete} - Status: {result.get('result')}")
             except Exception as e:
