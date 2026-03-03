@@ -191,7 +191,8 @@ FACEBOOK_HASHTAGS = """
 .
 .
 .
-"#Psychology #MentalHealth #Mindset #HumanBehavior #SelfGrowth #EmotionalIntelligence #BrainScience #TherapyTalk #PersonalDevelopment #PsychologyFacts #psychologyfacts #humanbehavior #mindset #selfimprovement #learnsomethingnew #factsdaily #socialskills #personality #brainfacts"
+"#facts #science #didyouknow #mindblowing #interestingfacts #amazingfacts #sciencefacts #knowledge #learnsomethingnew #education #howthingswork #explained #universe #spacefacts #psychologyfacts #brainfacts #dailyfacts #viral #trending #fyp #explorepage #reels #shorts #youtubeshorts #shortvideo #viralshorts #trendingreels #ytshorts #educationalvideo #factvideo
+ #PsychologyFacts #psychologyfacts #humanbehavior #mindset #selfimprovement #personality "
 """
 
 # --- HELPER FUNCTIONS ---
