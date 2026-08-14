@@ -2,7 +2,7 @@ name: Daily Roblox Shorts Bot
 
 on:
   schedule:
-    - cron: '30 4 * * *' # Daily 10:00 AM IST
+    - cron: '30 4 * * *' 
   workflow_dispatch:
 
 jobs:
@@ -16,30 +16,32 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11' # Python Version Fixed
+          python-version: '3.11' 
 
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18' # Node.js Added for yt-dlp JS runtime
+          node-version: '18' 
 
       - name: Install System Dependencies
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install Python Dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install --upgrade yt-dlp # Force upgrade yt-dlp to latest version to bypass JS challenge
 
       - name: Create Cookies File
         env:
           YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
-        run: echo "$YOUTUBE_COOKIES" > cookies.txt # Cookies Created
+        run: echo "$YOUTUBE_COOKIES" > cookies.txt 
 
       - name: Run Automation Script
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        run: python main.py # Running the script
+        run: python main.py 
 
       - name: Commit updated links.txt
         run: |
