@@ -2,8 +2,8 @@ name: Daily Roblox Shorts Bot
 
 on:
   schedule:
-    - cron: '30 4 * * *' # Yeh daily 10:00 AM IST (4:30 AM UTC) par chalega
-  workflow_dispatch: # Yeh button dega jisse aap manually bhi run kar sakein
+    - cron: '30 4 * * *' # Daily 10:00 AM IST par chalega
+  workflow_dispatch: # Manual run button dega
 
 jobs:
   build_and_publish:
@@ -16,10 +16,10 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.11' # Updated Python version
 
-      - name: Install FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install FFmpeg and Node.js
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg nodejs # Added Node.js for yt-dlp
 
       - name: Install Dependencies
         run: pip install -r requirements.txt
@@ -29,13 +29,13 @@ jobs:
           YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
         run: echo "$YOUTUBE_COOKIES" > cookies.txt
 
-      - name: Run Automation Script
+      - name: Run Script
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        run: python main.py
-        
+        run: python main.py # Running the python script
+
       - name: Commit updated links.txt
         run: |
           git config --global user.name "GitHub Actions Bot"
