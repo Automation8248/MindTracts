@@ -29,8 +29,8 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        run: main.py
-
+        run: python main.py
+        
       - name: Commit updated links.txt
         run: |
           git config --global user.name "GitHub Actions Bot"
