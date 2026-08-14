@@ -11,7 +11,6 @@ TOP_VIDEOS_FOLDER = "top_videos"
 LINKS_FILE = "links.txt"
 OUTPUT_FOLDER = "final_shorts"
 
-# GitHub Secrets se Tokens fetch karega
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
@@ -60,18 +59,19 @@ def get_gameplay_center_x(video_path, sample_frames=30):
     return 0.5
 
 def download_youtube_video(url, output_path):
-    """yt-dlp se best quality video download karna with cookies"""
+    """Flexible format downloader to prevent 'format not available' error"""
     ydl_opts = {
-        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]',
+        'format': 'bestvideo+bestaudio/best', # Ab yeh kisi bhi format me best quality download karega (webm/mp4)
+        'merge_output_format': 'mp4',         # Download hone ke baad automatically mp4 me merge karega
         'outtmpl': output_path,
-        'quiet': True,
-        'cookiefile': 'cookies.txt'  # Yahan cookies add ki gayi hain
+        'quiet': False,                       # Logs ko on rakha hai taki future me trace karna asan ho
+        'cookiefile': 'cookies.txt',
+        'nocheckcertificate': True
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
 
 def create_split_short(top_video, bottom_video, output_path, crop_x_ratio):
-    """Strictly 9:16 (1080x1920) Format"""
     crop_filter = f"scale=-1:960,crop=1080:960:iw*{crop_x_ratio}-540:0"
 
     ffmpeg_cmd = [
