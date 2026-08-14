@@ -1,322 +1,198 @@
 import os
-import json
-import random
+import cv2
+import numpy as np
+import subprocess
+import yt_dlp
 import requests
-import datetime
+import time
 
-# --- CONFIGURATION ---
-VIDEO_FOLDER = "videos"
-HISTORY_FILE = "history.json"
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
+# ================= CONFIGURATION =================
+TOP_VIDEOS_FOLDER = "top_videos"
+LINKS_FILE = "links.txt"
+OUTPUT_FOLDER = "final_shorts"
 
-# Yahan maine image se dekh kar aapka exact Repo Name daal diya hai
-GITHUB_REPO = "Automation8248/MindTracts" 
-BRANCH_NAME = "main"
+# GitHub Secrets se Tokens fetch karega
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-# --- DATA GRID (Pre-saved Titles & Captions) ---
+os.makedirs(TOP_VIDEOS_FOLDER, exist_ok=True)
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+# =================================================
 
-# List 1: Titles (Har bar inme se koi ek randomly select hoga)
-TITLES_GRID = [
-    "Psychology Says You’re Not Imagining This",
-    "This Is Why People Suddenly Change",
-    "Your Brain Does This Without You Knowing",
-    "If Someone Does This, Pay Attention",
-    "You Notice This Only When You Like Someone",
-    "Your Mind Is Testing You Right Now",
-    "People Reveal Themselves With This Habit",
-    "The Brain Interprets This As Danger",
-    "You Feel Drained For This Hidden Reason",
-    "This Behavior Always Means Something",
-    "You’ve Seen This But Never Understood It",
-    "Your Brain Reacts Faster Than You Think",
-    "Why Silence Makes People Uncomfortable",
-    "This Small Action Changes How People See You",
-    "Your Mind Is Protecting You From This",
-    "People Respect You When You Stop Doing This",
-    "The Real Reason People Pull Away",
-    "You Trust People Who Do This",
-    "This Is How The Brain Detects Lies",
-    "You Feel Awkward Because Of This Instinct",
-    "Your Brain Remembers Emotion, Not Words",
-    "People Notice This Before You Speak",
-    "This Habit Reveals Confidence Instantly",
-    "Why Overthinking Never Stops At Night",
-    "Your Brain Predicts People’s Intentions",
-    "This Reaction Is Completely Automatic",
-    "You Feel Attached Because Of This Trigger",
-    "People Mirror You Without Realizing",
-    "This Makes Someone Secretly Respect You",
-    "The Mind Hates Uncertainty For This Reason",
-    "You Feel Ignored Because Of This Signal",
-    "Your Brain Treats Rejection Like Pain",
-    "This Is Why First Impressions Never Change",
-    "People Test You Before Trusting You",
-    "You Remember Embarrassing Moments More",
-    "Your Brain Searches For Patterns Always",
-    "This Expression Reveals True Feelings",
-    "Why Quiet People Notice Everything",
-    "Your Mind Is Avoiding A Hard Truth",
-    "This Is How People Judge You Instantly",
-    "You Feel Safe Around People Who Do This",
-    "Your Brain Rewards Familiar Behavior",
-    "People Distance Themselves For This Reason",
-    "This Is A Sign Of Hidden Attraction",
-    "Your Brain Hates Being Ignored",
-    "You React Emotionally Before Thinking",
-    "This Makes Someone Feel Comfortable With You",
-    "The Brain Interprets Eye Contact Like This",
-    "You Miss Red Flags Because Of This Bias",
-    "People Value What Feels Rare",
-    "Your Mind Replays Moments To Learn",
-    "This Habit Creates Instant Authority",
-    "You Feel Anxious When The Brain Predicts Risk",
-    "People Like You More When You Do Less",
-    "Your Brain Saves Energy With Shortcuts",
-    "This Behavior Builds Trust Quickly",
-    "You Feel Jealous Because Of Comparison Instinct",
-    "The Brain Notices Changes Immediately",
-    "People Remember Feelings Over Facts",
-    "This Small Pause Changes Conversations",
-    "You Connect Faster Through Shared Emotion",
-    "Your Mind Prefers Familiar Pain",
-    "People Reveal Intentions Under Pressure",
-    "This Makes You Seem More Confident",
-    "Your Brain Detects Social Hierarchy Fast",
-    "You Think About Them For This Reason",
-    "The Brain Protects Your Self Image",
-    "People Follow Calm Individuals Naturally"
-]
+def get_gameplay_center_x(video_path, sample_frames=30):
+    """
+    OpenCV ka use karke gameplay mein motion/action ka center point (X-coordinate) find karta hai
+    taaki 9:16 vertical crop action ke center mein rahe.
+    """
+    cap = cv2.VideoCapture(video_path)
+    ret, prev_frame = cap.read()
+    if not ret:
+        cap.release()
+        return 0.5  # Default center (50%)
 
+    prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+    height, width = prev_gray.shape
+    x_centers = []
 
-
-# List 2: Captions (Har bar inme se koi ek randomly select hoga)
-CAPTIONS_GRID = [
-    "Watch till the end.",
-    "You needed to hear this today.",
-    "Most people never realize this.",
-    "Save this for later.",
-    "This changes how you see people.",
-    "Your brain already noticed it.",
-    "Now it makes sense.",
-    "Read that again.",
-    "You’ve experienced this before.",
-    "Nobody talks about this.",
-    "Think about it carefully.",
-    "This explains a lot.",
-    "You’ll notice it everywhere now.",
-    "It was always there.",
-    "Your mind remembers this.",
-    "This is not random.",
-    "People do this unconsciously.",
-    "You feel it but ignore it.",
-    "Your instincts were right.",
-    "Pay attention next time.",
-    "You can’t unsee this now.",
-    "Your brain connects patterns.",
-    "This reveals true intentions.",
-    "You’ve felt this before.",
-    "Your reactions have meaning.",
-    "It happens more than you think.",
-    "Observe quietly.",
-    "There’s always a reason.",
-    "Human behavior repeats.",
-    "This explains their actions.",
-    "Notice the small details.",
-    "The mind protects itself.",
-    "Emotions leave clues.",
-    "Your brain reacts instantly.",
-    "The silence says enough.",
-    "Patterns never lie.",
-    "Trust observation over words.",
-    "The brain avoids discomfort.",
-    "You sensed it immediately.",
-    "Nothing here is accidental.",
-    "Behavior shows truth.",
-    "You already knew this.",
-    "This affects relationships.",
-    "Watch people carefully.",
-    "The answer is subtle.",
-    "Psychology is everywhere.",
-    "Your perception shifts now.",
-    "Understanding changes reactions.",
-    "People reveal themselves slowly.",
-    "This changes conversations.",
-    "Rewatch and notice more.",
-    "You’ll remember this later.",
-    "The brain prefers familiarity.",
-    "Awareness changes everything.",
-    "Think deeper.",
-    "Small signs matter.",
-    "Your intuition picked it up.",
-    "Now you understand why.",
-    "Observe before reacting.",
-    "Human nature is predictable.",
-    "It’s always in the details.",
-    "Perception shapes reality.",
-    "You saw the sign.",
-    "This explains the feeling.",
-    "Now watch people again.",
-    "Silence reveals intention.",
-    "Understanding people is power."
-]
-
-
-# List 3: Fixed Hashtags (Ye har video me SAME rahega)
-FIXED_HASHTAGS = """
-.
-.
-.
-.
-.
-#viral #trending #fyp #foryou #reels #short #shorts #ytshorts #explore #explorepage #viralvideo #trend #newvideo #content #creator #dailycontent #entertainment #fun #interesting #watchtillend #mustwatch #reality #real #moment #life #daily #people #reaction #vibes #share #support"""
-
-# Isse AFFILIATE_HASHTAGS se badal kar INSTA_HASHTAGS kar diya hai
-INSTA_HASHTAGS = """
-.
-.
-.
-.
-"#psychologyfacts #humanbehavior #mindset #selfimprovement #psychologytricks"
-"""
-YOUTUBE_HASHTAGS = """
-.
-.
-.
-" #psychologyfacts #humanbehavior #mindset #selfimprovement #brainfacts #psychologytricks #socialskills #shorts #youtubeshorts #youtubeshorts #youtube #shorts #subscribe #viralshorts"
-"""
-
-FACEBOOK_HASHTAGS = """
-.
-.
-.
-"#facts #science #didyouknow #mindblowing #interestingfacts #amazingfacts #sciencefacts #knowledge #learnsomethingnew #education #howthingswork #explained #universe #spacefacts #psychologyfacts #brainfacts #dailyfacts #viral #trending #fyp #explorepage #reels #shorts #youtubeshorts #shortvideo #viralshorts #trendingreels #ytshorts #educationalvideo #factvideo
- #PsychologyFacts #psychologyfacts #humanbehavior #mindset #selfimprovement #personality "
-"""
-
-# --- HELPER FUNCTIONS ---
-
-def load_history():
-    if not os.path.exists(HISTORY_FILE):
-        return []
-    with open(HISTORY_FILE, 'r') as f:
-        return json.load(f)
-
-def save_history(data):
-    with open(HISTORY_FILE, 'w') as f:
-        json.dump(data, f, indent=4)
-
-# --- MAIN LOGIC ---
-
-def run_automation():
-    # 1. DELETE OLD FILES (15 Days Logic)
-    history = load_history()
-    today = datetime.date.today()
-    new_history = []
-    
-    print("Checking for expired videos...")
-    for entry in history:
-        sent_date = datetime.date.fromisoformat(entry['date_sent'])
-        days_diff = (today - sent_date).days
+    frame_count = 0
+    while cap.isOpened() and frame_count < sample_frames * 5:
+        ret, frame = cap.read()
+        if not ret:
+            break
         
-        file_path = os.path.join(VIDEO_FOLDER, entry['filename'])
-        
-        if days_diff >= 15:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-                print(f"DELETED EXPIRED: {entry['filename']}")
-        else:
-            new_history.append(entry)
-    
-    save_history(new_history)
-    history = new_history 
+        if frame_count % 5 == 0:  # Sample every 5th frame for performance
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            diff = cv2.absdiff(prev_gray, gray)
+            _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+            
+            # Find motion contours
+            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if contours:
+                largest_contour = max(contours, key=cv2.contourArea)
+                if cv2.contourArea(largest_contour) > 500:
+                    x, y, w, h = cv2.boundingRect(largest_contour)
+                    x_centers.append(x + w / 2)
+            
+            prev_gray = gray
+        frame_count += 1
 
-    # 2. PICK NEW VIDEO
-    if not os.path.exists(VIDEO_FOLDER):
-        os.makedirs(VIDEO_FOLDER)
+    cap.release()
+
+    if x_centers:
+        avg_x = np.mean(x_centers)
+        return avg_x / width  # Returns percentage offset from left (0.0 to 1.0)
+    return 0.5
+
+def download_youtube_video(url, output_path):
+    """yt-dlp se best quality video download karna"""
+    ydl_opts = {
+        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]',
+        'outtmpl': output_path,
+        'quiet': True
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+
+def create_split_short(top_video, bottom_video, output_path, crop_x_ratio):
+    """
+    FFmpeg se video crop karke, split screen merge karega STRICTLY in 9:16 format (1080x1920)
+    """
+    # 9:16 Resolution = 1080x1920 total.
+    # Split in half vertically = 1080x960 per video.
+    
+    # Bottom video (gameplay) ke liye dynamic motion-based horizontal crop
+    crop_filter = f"scale=-1:960,crop=1080:960:iw*{crop_x_ratio}-540:0"
+
+    ffmpeg_cmd = [
+        'ffmpeg', '-y',
+        '-i', top_video,
+        '-t', '60', '-i', bottom_video, # Limit bottom video to 60 seconds
+        '-filter_complex',
+        # Top video ko strictly 1080x960 banayega
+        f"[0:v]scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960[top];"
+        # Bottom video ko gameplay action ke hisaab se 1080x960 banayega
+        f"[1:v]{crop_filter}[bottom];"
+        # Dono ko upar-niche jodkar exactly 9:16 Aspect Ratio set karega
+        f"[top][bottom]vstack=inputs=2,setdar=9/16[v]",
+        '-map', '[v]',
+        '-map', '1:a',  # Sirf Roblox Gameplay Audio 100% volume par
+        '-c:v', 'libx264',
+        '-c:a', 'aac',
+        '-shortest',
+        output_path
+    ]
+    
+    # Command run karna
+    subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+def send_to_telegram(video_path, caption):
+    """Telegram par final short send karna"""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("⚠️ Telegram Credentials missing, skipping Telegram upload.")
+        return
         
-    all_videos = [f for f in os.listdir(VIDEO_FOLDER) if f.lower().endswith(('.mp4', '.mov', '.mkv'))]
-    sent_filenames = [entry['filename'] for entry in history]
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
+    try:
+        with open(video_path, 'rb') as video:
+            payload = {'chat_id': TELEGRAM_CHAT_ID, 'caption': caption}
+            files = {'video': video}
+            res = requests.post(url, data=payload, files=files)
+            if res.status_code == 200:
+                print("✅ Successfully sent to Telegram!")
+            else:
+                print(f"❌ Telegram Error: {res.text}")
+    except Exception as e:
+        print(f"❌ Failed to send Telegram message: {e}")
+
+def send_to_webhook(video_path, title):
+    """Discord/N8n Webhook par final short send karna"""
+    if not WEBHOOK_URL:
+        print("⚠️ Webhook URL missing, skipping Webhook upload.")
+        return
+        
+    try:
+        with open(video_path, 'rb') as video:
+            files = {'file': (os.path.basename(video_path), video)}
+            data = {'content': f"🤖 **New Short Generated (9:16):** {title}"}
+            res = requests.post(WEBHOOK_URL, data=data, files=files)
+            if res.status_code in [200, 204]:
+                print("✅ Successfully sent to Webhook!")
+            else:
+                print(f"❌ Webhook Error: {res.text}")
+    except Exception as e:
+        print(f"❌ Failed to send Webhook: {e}")
+
+def process_job():
+    print("\n🚀 Starting GitHub Actions Automation Job...")
     
-    available_videos = [v for v in all_videos if v not in sent_filenames]
-    
-    if not available_videos:
-        print("No new videos to send.")
+    if not os.path.exists(LINKS_FILE):
+        print("❌ Error: links.txt file nahi mili.")
         return
 
-    video_to_send = random.choice(available_videos)
-    video_path = os.path.join(VIDEO_FOLDER, video_to_send)
+    with open(LINKS_FILE, 'r') as f:
+        urls = [line.strip() for line in f if line.strip()]
+
+    top_videos = [os.path.join(TOP_VIDEOS_FOLDER, f) for f in os.listdir(TOP_VIDEOS_FOLDER) if f.endswith('.mp4')]
+
+    if not urls:
+        print("⚠️ Empty links.txt file. No new videos to process.")
+        return
+    if not top_videos:
+        print("❌ Error: top_videos folder khali hai. Kam se kam ek video zaroori hai.")
+        return
+
+    # Pehla URL nikalna
+    url = urls.pop(0)
     
-    print(f"Selected Video File: {video_to_send}")
+    # links.txt ko update karna (taaki next time same link use na ho)
+    with open(LINKS_FILE, 'w') as f:
+        for u in urls:
+            f.write(f"{u}\n")
 
-    # 3. RANDOM SELECTION (Grid System)
-    selected_title = random.choice(TITLES_GRID)
-    selected_caption = random.choice(CAPTIONS_GRID)
-    
-    # Combine content
-    full_telegram_caption = f"{selected_title}\n\n{selected_caption}\n{FIXED_HASHTAGS}"
-    
-    print(f"Generated Title: {selected_title}")
-    print(f"Generated Caption: {selected_caption}")
+    temp_roblox = "temp_roblox.mp4"
+    output_short = os.path.join(OUTPUT_FOLDER, f"short_{int(time.time())}.mp4")
 
-    # 4. SEND TO TELEGRAM
-    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
-        print("Sending to Telegram...")
-        
-        # Server time ko automatically Indian Standard Time (IST) mein convert karna
-        ist_now = datetime.datetime.utcnow() + datetime.timedelta(hours=5, minutes=30)
-        
-        # Format: DD MONTH HH:MM:SS AM/PM YYYY aur sabko CAPITAL karna
-        time_string = ist_now.strftime("%d %b %I:%M:%S %p %Y").upper()
-        
-        # Sirf bold date aur time, koi title/hashtag nahi
-        telegram_caption = f"<b>{time_string}</b>"
+    print(f"📥 Downloading Roblox Video: {url}")
+    download_youtube_video(url, temp_roblox)
 
-        with open(video_path, 'rb') as video_file:
-            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
-            payload = {
-                'chat_id': TELEGRAM_CHAT_ID, 
-                'caption': telegram_caption,
-                'parse_mode': 'HTML' # <b> tag se text ko bold karne ke liye zaroori hai
-            }
-            files = {'video': video_file}
-            try:
-                requests.post(url, data=payload, files=files)
-            except Exception as e:
-                print(f"Telegram Error: {e}")
+    print("🔍 Analyzing gameplay action zone (OpenCV)...")
+    crop_x_ratio = get_gameplay_center_x(temp_roblox)
+    print(f"🎯 Gameplay Pinpoint Center Ratio: {crop_x_ratio:.2f}")
 
-    # 5. SEND TO WEBHOOK
-    if WEBHOOK_URL:
-        print("Sending to Webhook...")
-        # URL construction with your specific repo name
-        raw_video_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{BRANCH_NAME}/{VIDEO_FOLDER}/{video_to_send}"
-        # Encode spaces if any
-        raw_video_url = raw_video_url.replace(" ", "%20")
-        
-        webhook_data = {
-            "video_url": raw_video_url,
-            "title": selected_title,
-            "caption": selected_caption,
-            "hashtags": FIXED_HASHTAGS,
-            "insta_hashtags": INSTA_HASHTAGS,
-            "youtube_hashtags": YOUTUBE_HASHTAGS, # Naya add kiya gaya
-            "facebook_hashtags": FACEBOOK_HASHTAGS, # Naya add kiya gaya
-            "source": "AffiliateBot"
-        }
-        try:
-            requests.post(WEBHOOK_URL, json=webhook_data)
-            print(f"Webhook Sent: {raw_video_url}")
-        except Exception as e:
-            print(f"Webhook Error: {e}")
+    print("🎬 Generating 9:16 Split Screen Short Video...")
+    top_video = top_videos[0]  # Folder ka pehla top video use karega
+    create_split_short(top_video, temp_roblox, output_short, crop_x_ratio)
 
-    # 6. UPDATE HISTORY
-    new_history.append({
-        "filename": video_to_send,
-        "date_sent": today.isoformat()
-    })
-    save_history(new_history)
-    print("Automation Complete.")
+    print("📤 Sending Output File to platforms...")
+    send_to_telegram(output_short, "🎮 New Roblox Short Ready! (9:16 Aspect Ratio)")
+    send_to_webhook(output_short, "New Roblox Short")
+
+    # Cleanup temp video to save space
+    if os.path.exists(temp_roblox):
+        os.remove(temp_roblox)
+
+    print("✅ Daily Job Completed Successfully!")
 
 if __name__ == "__main__":
-    run_automation()
+    process_job()
