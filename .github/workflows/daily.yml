@@ -24,6 +24,11 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
+      - name: Create Cookies File
+        env:
+          YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+        run: echo "$YOUTUBE_COOKIES" > cookies.txt
+
       - name: Run Automation Script
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
