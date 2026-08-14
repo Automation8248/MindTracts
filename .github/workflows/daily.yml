@@ -2,8 +2,8 @@ name: Daily Roblox Shorts Bot
 
 on:
   schedule:
-    - cron: '30 4 * * *' # Daily 10:00 AM IST par chalega
-  workflow_dispatch: # Manual run button dega
+    - cron: '30 4 * * *' # Daily 10:00 AM IST
+  workflow_dispatch:
 
 jobs:
   build_and_publish:
@@ -16,25 +16,30 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11' # Updated Python version
+          python-version: '3.11' # Python Version Fixed
 
-      - name: Install FFmpeg and Node.js
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg nodejs # Added Node.js for yt-dlp
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18' # Node.js Added for yt-dlp JS runtime
 
-      - name: Install Dependencies
+      - name: Install System Dependencies
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Python Dependencies
         run: pip install -r requirements.txt
 
       - name: Create Cookies File
         env:
           YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
-        run: echo "$YOUTUBE_COOKIES" > cookies.txt
+        run: echo "$YOUTUBE_COOKIES" > cookies.txt # Cookies Created
 
-      - name: Run Script
+      - name: Run Automation Script
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
-        run: python main.py # Running the python script
+        run: python main.py # Running the script
 
       - name: Commit updated links.txt
         run: |
