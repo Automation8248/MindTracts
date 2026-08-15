@@ -23,7 +23,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install Python Dependencies
-        # Yeh aapki requirements.txt se pytubefix, opencv waghera install karega
+        # Yeh aapki requirements.txt se pytubefix, yt-dlp, opencv waghera install karega
         run: pip install -r requirements.txt
 
       - name: Run Automation Script
