@@ -4,15 +4,15 @@ import numpy as np
 import subprocess
 import requests
 import time
-import random
+import yt_dlp
 from pytubefix import YouTube
+from urllib.parse import urlparse, parse_qs
 
 # ================= CONFIGURATION =================
 TOP_VIDEOS_FOLDER = "top_videos"
 LINKS_FILE = "links.txt"
 OUTPUT_FOLDER = "final_shorts"
 
-# GitHub Secrets ya local environment variables
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
@@ -20,139 +20,179 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 os.makedirs(TOP_VIDEOS_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-# ================= 30+ USER AGENTS =================
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
-    "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0",
-    "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.43 Mobile Safari/537.36",
-    "Mozilla/5.0 (Linux; Android 12; Pixel 6 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.163 Mobile Safari/537.36",
-    "Mozilla/5.0 (Linux; Android 13; SM-A536B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.80 Mobile Safari/537.36",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (iPad; CPU OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1"
-    # Note: I've kept a strong mix of 15+ solid ones here to keep code clean and fast, 
-    # but the logic randomly selects one every time it runs!
-]
+# =================================================
+# 1. FALLBACK DOWNLOADER ENGINE (The Real APIs)
 # =================================================
 
-def download_youtube_video(url, output_path):
-    """Pytubefix aur PO Token ka use karke bypass karna (No Fake User-Agents)"""
-    try:
-        # client='WEB' aur use_po_token=True sabse best combination hai 400 Error hatane ke liye
-        yt = YouTube(url, client='WEB', use_po_token=True)
-        
-        print(f"🔄 Fetching video streams for: {yt.title}")
-        # Fetching highest resolution MP4
-        stream = yt.streams.filter(file_extension='mp4').get_highest_resolution()
-        
-        print("⬇️ Downloading video...")
-        stream.download(filename=output_path)
-        print("✅ Download Completed!")
+def extract_video_id(url):
+    """URL se YouTube Video ID nikalna APIs ke liye"""
+    parsed = urlparse(url)
+    if parsed.hostname in ['youtu.be']: return parsed.path[1:]
+    if parsed.hostname in ['www.youtube.com', 'youtube.com']:
+        return parse_qs(parsed.query).get('v', [None])[0]
+    return None
+
+def download_source_1_cobalt(url, output_path):
+    """Priority 1: Cobalt API (Direct Server Request)"""
+    print("▶️ Attempting Cobalt API...")
+    headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
+    # Cobalt requires identifying your tool to avoid blocks
+    headers['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AutomationBot/1.0' 
+    data = {'url': url, 'videoQuality': '1080', 'filenamePattern': 'classic'}
+    
+    res = requests.post('https://api.cobalt.tools/api/json', headers=headers, json=data, timeout=15)
+    res.raise_for_status()
+    download_url = res.json().get('url')
+    
+    if download_url:
+        video_data = requests.get(download_url, stream=True)
+        with open(output_path, 'wb') as f:
+            for chunk in video_data.iter_content(chunk_size=1024):
+                if chunk: f.write(chunk)
         return True
-    except Exception as e:
-        print(f"❌ Download Error: {e}")
-        return False
+    raise Exception("Cobalt returned invalid response")
+
+def download_source_2_piped(url, output_path):
+    """Priority 2: Piped API (Alternative Frontend)"""
+    print("▶️ Attempting Piped API...")
+    video_id = extract_video_id(url)
+    if not video_id: raise Exception("Invalid YouTube URL")
+    
+    res = requests.get(f'https://pipedapi.kavin.rocks/streams/{video_id}', timeout=15)
+    res.raise_for_status()
+    streams = res.json().get('videoStreams', [])
+    
+    # 1080p ya highest available mp4 nikalna
+    mp4_streams = [s for s in streams if s.get('format') == 'MPEG_4']
+    if not mp4_streams: raise Exception("No MP4 stream found on Piped")
+    
+    best_stream = sorted(mp4_streams, key=lambda x: x.get('bitrate', 0), reverse=True)[0]
+    video_data = requests.get(best_stream['url'], stream=True)
+    with open(output_path, 'wb') as f:
+        for chunk in video_data.iter_content(chunk_size=1024):
+            if chunk: f.write(chunk)
+    return True
+
+def download_source_3_pytubefix(url, output_path):
+    """Priority 3: Pytubefix with PO Token"""
+    print("▶️ Attempting Pytubefix...")
+    yt = YouTube(url, client='WEB', use_po_token=True)
+    stream = yt.streams.filter(file_extension='mp4').get_highest_resolution()
+    stream.download(filename=output_path)
+    return True
+
+def download_source_4_ytdlp(url, output_path):
+    """Priority 4: yt-dlp (The Ultimate Fallback)"""
+    print("▶️ Attempting yt-dlp...")
+    ydl_opts = {
+        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        'outtmpl': output_path,
+        'quiet': True,
+        'nocheckcertificate': True
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+    return True
+
+def robust_download(url, output_path):
+    """Cycles through downloader APIs one by one until success."""
+    
+    download_sources = [
+        ("Cobalt API", download_source_1_cobalt),
+        ("Piped API", download_source_2_piped),
+        ("Pytubefix", download_source_3_pytubefix),
+        ("yt-dlp", download_source_4_ytdlp)
+    ]
+    
+    for source_name, download_func in download_sources:
+        try:
+            download_func(url, output_path)
+            if os.path.exists(output_path) and os.path.getsize(output_path) > 1024:
+                print(f"✅ Success! Downloaded via {source_name}")
+                return True
+            else:
+                raise ValueError("File is empty or corrupted.")
+        except Exception as e:
+            print(f"❌ {source_name} failed: {e}")
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            print("🔄 Switching to next source...")
+            time.sleep(2)
+            
+    print("❌ All API sources failed to download the video.")
+    return False
+
+
+# =================================================
+# 2. VIDEO EDITING & DELIVERY ENGINE
+# =================================================
 
 def get_gameplay_center_x(video_path, sample_frames=30):
-    """OpenCV se Roblox gameplay ka center point dhundhna taaki crop perfect ho"""
     cap = cv2.VideoCapture(video_path)
     ret, prev_frame = cap.read()
     if not ret:
         cap.release()
         return 0.5
-
     prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
-    height, width = prev_gray.shape
+    width = prev_gray.shape[1]
     x_centers = []
-
     frame_count = 0
     while cap.isOpened() and frame_count < sample_frames * 5:
         ret, frame = cap.read()
-        if not ret:
-            break
-        
+        if not ret: break
         if frame_count % 5 == 0:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             diff = cv2.absdiff(prev_gray, gray)
             _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
-            
             contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             if contours:
                 largest_contour = max(contours, key=cv2.contourArea)
                 if cv2.contourArea(largest_contour) > 500:
                     x, y, w, h = cv2.boundingRect(largest_contour)
                     x_centers.append(x + w / 2)
-            
             prev_gray = gray
         frame_count += 1
-
     cap.release()
-
-    if x_centers:
-        avg_x = np.mean(x_centers)
-        return avg_x / width
-    return 0.5
+    return np.mean(x_centers) / width if x_centers else 0.5
 
 def create_split_short(top_video, bottom_video, output_path, crop_x_ratio):
-    """FFmpeg ka use karke 9:16 Split Screen Short Banana (60 Sec max)"""
-    # Bottom video (Roblox) horizontal crop logic based on OpenCV
     crop_filter = f"scale=-1:960,crop=1080:960:iw*{crop_x_ratio}-540:0"
-
     ffmpeg_cmd = [
         'ffmpeg', '-y',
-        '-i', top_video,
-        '-t', '60', '-i', bottom_video, # Limit gameplay to 60 seconds
+        '-i', top_video, '-t', '60', '-i', bottom_video,
         '-filter_complex',
         f"[0:v]scale=1080:960:force_original_aspect_ratio=increase,crop=1080:960[top];"
         f"[1:v]{crop_filter}[bottom];"
         f"[top][bottom]vstack=inputs=2,setdar=9/16[v]",
-        '-map', '[v]',
-        '-map', '1:a', # Sirf Roblox (bottom) ka audio use karega 100% volume par
-        '-c:v', 'libx264',
-        '-c:a', 'aac',
-        '-shortest',
+        '-map', '[v]', '-map', '1:a',
+        '-c:v', 'libx264', '-c:a', 'aac', '-shortest',
         output_path
     ]
-    
-    print("✂️ FFmpeg is editing the video...")
+    print("✂️ Editing split-screen video with FFmpeg...")
     subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def send_to_telegram(video_path, caption):
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        return
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID: return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
     try:
         with open(video_path, 'rb') as video:
-            payload = {'chat_id': TELEGRAM_CHAT_ID, 'caption': caption}
-            files = {'video': video}
-            requests.post(url, data=payload, files=files)
+            requests.post(url, data={'chat_id': TELEGRAM_CHAT_ID, 'caption': caption}, files={'video': video})
             print("🚀 Sent to Telegram!")
     except Exception as e:
         print(f"Telegram Error: {e}")
 
 def send_to_webhook(video_path, title):
-    if not WEBHOOK_URL:
-        return
+    if not WEBHOOK_URL: return
     try:
         with open(video_path, 'rb') as video:
-            files = {'file': (os.path.basename(video_path), video)}
-            data = {'content': f"🤖 **New Short Edited (9:16):** {title}"}
-            requests.post(WEBHOOK_URL, data=data, files=files)
+            requests.post(WEBHOOK_URL, data={'content': f"🤖 **New Short Edited (9:16):** {title}"}, files={'file': (os.path.basename(video_path), video)})
             print("🚀 Sent to Webhook!")
     except Exception as e:
         print(f"Webhook Error: {e}")
 
 def process_job():
     print("\n==================================")
-    print("🚀 Starting Shorts Automation Job...")
+    print("🚀 Starting Multi-API Automation Job...")
     print("==================================")
     
     if not os.path.exists(LINKS_FILE):
@@ -164,50 +204,35 @@ def process_job():
 
     top_videos = [os.path.join(TOP_VIDEOS_FOLDER, f) for f in os.listdir(TOP_VIDEOS_FOLDER) if f.endswith('.mp4')]
 
-    if not urls:
-        print("⚠️ No links left in links.txt.")
-        return
-    if not top_videos:
-        print("❌ Error: top_videos folder is empty.")
+    if not urls or not top_videos:
+        print("⚠️ No links left or top_videos folder is empty.")
         return
 
-    # Extract first link
     url = urls.pop(0)
-    
-    # Update links.txt
     with open(LINKS_FILE, 'w') as f:
-        for u in urls:
-            f.write(f"{u}\n")
+        for u in urls: f.write(f"{u}\n")
 
     temp_roblox = "temp_roblox.mp4"
     output_short = os.path.join(OUTPUT_FOLDER, f"short_{int(time.time())}.mp4")
 
-    # 1. Download
+    # Step 1: Robust Download
     print(f"📥 Processing Link: {url}")
-    success = download_youtube_video(url, temp_roblox)
+    success = robust_download(url, temp_roblox)
     
     if not success:
-        print("❌ Stopping process due to download failure.")
+        print("❌ Stopping process due to total download failure.")
         return
 
-    # 2. Smart Crop Zone Analysis
-    print("🔍 Analyzing Action Zone for perfect crop...")
+    # Step 2: Edit
     crop_x_ratio = get_gameplay_center_x(temp_roblox)
+    create_split_short(top_videos[0], temp_roblox, output_short, crop_x_ratio)
 
-    # 3. Edit with FFmpeg
-    print("🎬 Generating Split Screen Video (Top + Roblox Bottom)...")
-    top_video = top_videos[0] # Pick the first top video
-    create_split_short(top_video, temp_roblox, output_short, crop_x_ratio)
-
-    # 4. Delivery
-    print("📤 Distributing Final Video...")
+    # Step 3: Delivery
     send_to_telegram(output_short, "🎮 New Roblox Short Ready!")
     send_to_webhook(output_short, "New Roblox Short")
 
     # Cleanup
-    if os.path.exists(temp_roblox):
-        os.remove(temp_roblox)
-        
+    if os.path.exists(temp_roblox): os.remove(temp_roblox)
     print("✅ Daily Job Completed Successfully!")
 
 if __name__ == "__main__":
