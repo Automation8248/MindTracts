@@ -44,17 +44,13 @@ USER_AGENTS = [
 # =================================================
 
 def download_youtube_video(url, output_path):
-    """Pytubefix + Random User-Agent se Bot protection bypass karke video download"""
-    random_ua = random.choice(USER_AGENTS)
-    print(f"🕵️ Using User-Agent: {random_ua}")
-    
+    """Pytubefix aur PO Token ka use karke bypass karna (No Fake User-Agents)"""
     try:
-        # client='ANDROID' bypasses most heavy JS challenges on YouTube
-        yt = YouTube(url, use_oauth=False, allow_oauth_cache=True, client='ANDROID')
-        yt.custom_client_headers = {"User-Agent": random_ua}
+        # client='WEB' aur use_po_token=True sabse best combination hai 400 Error hatane ke liye
+        yt = YouTube(url, client='WEB', use_po_token=True)
         
         print(f"🔄 Fetching video streams for: {yt.title}")
-        # Fetching highest resolution MP4 to ensure FFmpeg works smoothly
+        # Fetching highest resolution MP4
         stream = yt.streams.filter(file_extension='mp4').get_highest_resolution()
         
         print("⬇️ Downloading video...")
