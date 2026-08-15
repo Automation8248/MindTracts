@@ -2,8 +2,8 @@ name: Daily Roblox Shorts Bot
 
 on:
   schedule:
-    - cron: '30 4 * * *' 
-  workflow_dispatch:
+    - cron: '30 4 * * *' # Roz subah 10:00 AM IST par chalega
+  workflow_dispatch: # Manual run ke liye button dega
 
 jobs:
   build_and_publish:
@@ -16,34 +16,26 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11' 
+          python-version: '3.11' # Best and stable version
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18' 
-
-      - name: Install System Dependencies
+      - name: Install System Dependencies (FFmpeg)
+        # FFmpeg video cropping aur merge karne ke liye zaroori hai
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install Python Dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install --upgrade yt-dlp # Force upgrade yt-dlp to latest version to bypass JS challenge
-
-      - name: Create Cookies File
-        env:
-          YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
-        run: echo "$YOUTUBE_COOKIES" > cookies.txt 
+        # Yeh aapki requirements.txt se pytubefix, opencv waghera install karega
+        run: pip install -r requirements.txt
 
       - name: Run Automation Script
         env:
+          # GitHub Secrets se Tokens fetch karke script ko pass karega
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: python main.py 
 
       - name: Commit updated links.txt
+        # Script chalne ke baad bache hue links ko wapas save karega taaki duplicate na bane
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
