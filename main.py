@@ -7,7 +7,6 @@ import time
 import yt_dlp
 import random
 import string
-from pytubefix import YouTube
 from urllib.parse import urlparse, parse_qs
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -31,7 +30,7 @@ UPLOAD_HOSTS = [
 ]
 
 # =================================================
-# 1. THE COOKIE-POWERED DOWNLOADER ENGINE
+# 1. STRICT COOKIE-ONLY DOWNLOADER ENGINE
 # =================================================
 
 def extract_video_id(url):
@@ -41,9 +40,10 @@ def extract_video_id(url):
         return parse_qs(parsed.query).get('v', [None])[0]
     return None
 
-def download_source_1_cookie_master(url, output_path):
-    """PRIORITY 1: Strictly uses YouTube Cookies to bypass everything naturally"""
-    print("▶️ Attempting yt-dlp (Strictly using YouTube Cookies)...")
+def download_video_with_cookies(url, output_path):
+    """STRICTLY uses YouTube Cookies via yt-dlp and detects if they are expired."""
+    print("\n▶️ Attempting yt-dlp (Strictly using YouTube Cookies)...")
+    
     ydl_opts = {
         'format': 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b', 
         'outtmpl': output_path,
@@ -52,57 +52,37 @@ def download_source_1_cookie_master(url, output_path):
         'cookiefile': 'cookies.txt', # 🍪 YAHAN COOKIES KA USE HO RAHA HAI
         'extractor_args': {'youtube': ['player_client=web,tv,ios']} 
     }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
-    return True
-
-def download_source_2_pytubefix_android(url, output_path):
-    """PRIORITY 2: Fallback to Pytubefix Android if cookies fail"""
-    print("▶️ Attempting Pytubefix (Silent Android Mode)...")
-    link = YouTube(url, client='ANDROID') 
-    video = link.streams.get_highest_resolution()
-    video.download(filename=output_path)
-    return True
-
-def download_source_3_piped_api(url, output_path):
-    """PRIORITY 3: Alternative YouTube Frontend API"""
-    print("▶️ Attempting Piped API (Alternative Server)...")
-    video_id = extract_video_id(url)
-    if not video_id: raise Exception("Invalid ID")
-    res = requests.get(f'https://pipedapi.kavin.rocks/streams/{video_id}', timeout=15)
-    res.raise_for_status()
-    streams = res.json().get('videoStreams', [])
-    best_stream = sorted([s for s in streams if s.get('format') == 'MPEG_4'], key=lambda x: x.get('bitrate', 0), reverse=True)[0]
-    video_data = requests.get(best_stream['url'], stream=True)
-    with open(output_path, 'wb') as f:
-        for chunk in video_data.iter_content(chunk_size=1024):
-            if chunk: f.write(chunk)
-    return True
-
-def robust_download(url, output_path):
-    download_sources = [
-        ("yt-dlp with Cookies", download_source_1_cookie_master),
-        ("Pytubefix Android", download_source_2_pytubefix_android),
-        ("Piped API", download_source_3_piped_api)
-    ]
     
-    for source_name, download_func in download_sources:
-        try:
-            download_func(url, output_path)
-            if os.path.exists(output_path) and os.path.getsize(output_path) > 1024:
-                print(f"✅ Success! Downloaded via {source_name}")
-                return True
-            else:
-                raise ValueError("File is empty or corrupted.")
-        except Exception as e:
-            print(f"❌ {source_name} failed: {e}")
-            if os.path.exists(output_path):
-                os.remove(output_path)
-            print("🔄 Switching to next source...")
-            time.sleep(2)
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
             
-    print("❌ All sources failed to download the video.")
-    return False
+        # Validation
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 1024:
+            print("✅ Success! Video downloaded perfectly using cookies.")
+            return True
+        else:
+            print("❌ Downloaded file is empty or corrupted.")
+            return False
+            
+    except Exception as e:
+        error_msg = str(e).lower()
+        
+        # 🚨 SMART COOKIE EXPIRED DETECTOR 🚨
+        if any(keyword in error_msg for keyword in ["sign in", "cookies", "bot", "age-restricted", "login"]):
+            print("\n=======================================================")
+            print("🚨 ERROR: YOUTUBE COOKIES EXPIRED YA INVALID HAIN! 🚨")
+            print("👉 Kripya nayi cookies extract karein aur GitHub Secrets")
+            print("   (YOUTUBE_COOKIES) mein update karein.")
+            print("=======================================================\n")
+        else:
+            print(f"❌ Download failed due to other error: {e}")
+            
+        # Cleanup corrupt file if exists
+        if os.path.exists(output_path):
+            os.remove(output_path)
+            
+        return False
 
 # =================================================
 # 2. VIDEO EDITING ENGINE (FFmpeg)
@@ -345,7 +325,7 @@ def upload_and_send_webhook(host, file_path, original_url):
 
 def process_job():
     print("\n==================================")
-    print("🚀 Starting Cookie-Powered Automation Job...")
+    print("🚀 Starting Cookie-Strict Automation Job...")
     print("==================================")
     
     if not os.path.exists(LINKS_FILE):
@@ -368,12 +348,17 @@ def process_job():
     temp_roblox = "temp_roblox.mp4"
     output_short = os.path.join(OUTPUT_FOLDER, f"short_{int(time.time())}.mp4")
 
-    # Step 1: Robust Download
+    # Step 1: Strict Cookie Download
     print(f"📥 Processing Link: {url}")
-    success = robust_download(url, temp_roblox)
+    success = download_video_with_cookies(url, temp_roblox)
     
     if not success:
-        print("❌ Stopping process due to total download failure.")
+        print("❌ Stopping process due to download failure (Check Cookies).")
+        # Put the URL back in the list so it doesn't get skipped next time
+        with open(LINKS_FILE, 'r') as f:
+            existing = f.read()
+        with open(LINKS_FILE, 'w') as f:
+            f.write(url + "\n" + existing)
         return
 
     # Step 2: Edit
