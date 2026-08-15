@@ -59,13 +59,15 @@ def get_gameplay_center_x(video_path, sample_frames=30):
     return 0.5
 
 def download_youtube_video(url, output_path):
-    """Flexible format downloader to prevent 'format not available' error"""
+    """Bypass YouTube Bot Protection by using Android Client"""
     ydl_opts = {
-        'format': 'bestvideo+bestaudio/best', # Ab yeh kisi bhi format me best quality download karega (webm/mp4)
-        'merge_output_format': 'mp4',         # Download hone ke baad automatically mp4 me merge karega
+        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        'merge_output_format': 'mp4',
         'outtmpl': output_path,
-        'quiet': False,                       # Logs ko on rakha hai taki future me trace karna asan ho
+        'quiet': False,
         'cookiefile': 'cookies.txt',
+        # YAHI WOH JADUI LINE HAI JO ERROR KO KHATAM KAREGI 👇
+        'extractor_args': {'youtube': ['player_client=android']}, 
         'nocheckcertificate': True
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
