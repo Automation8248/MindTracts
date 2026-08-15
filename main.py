@@ -31,7 +31,7 @@ UPLOAD_HOSTS = [
 ]
 
 # =================================================
-# 1. FALLBACK DOWNLOADER ENGINE (WITH COOKIES)
+# 1. JABARDASTI (AGGRESSIVE) DOWNLOADER ENGINE
 # =================================================
 
 def extract_video_id(url):
@@ -41,46 +41,50 @@ def extract_video_id(url):
         return parse_qs(parsed.query).get('v', [None])[0]
     return None
 
-def download_source_1_pytubefix(url, output_path):
-    print("▶️ Attempting Pytubefix...")
-    link = YouTube(url, client='WEB', use_po_token=True)
-    video = link.streams.filter(file_extension='mp4').get_highest_resolution()
-    video.download(filename=output_path)
-    return True
-
-def download_source_2_cobalt(url, output_path):
-    print("▶️ Attempting Cobalt API...")
-    headers = {'Accept': 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'}
-    data = {'url': url, 'videoQuality': '1080', 'filenamePattern': 'classic'}
-    res = requests.post('https://api.cobalt.tools/api/json', headers=headers, json=data, timeout=15)
-    res.raise_for_status()
-    download_url = res.json().get('url')
-    if download_url:
-        video_data = requests.get(download_url, stream=True)
-        with open(output_path, 'wb') as f:
-            for chunk in video_data.iter_content(chunk_size=1024):
-                if chunk: f.write(chunk)
-        return True
-    raise Exception("Cobalt returned invalid response")
-
-def download_source_3_ytdlp(url, output_path):
-    print("▶️ Attempting yt-dlp (With Cookies)...")
+def download_source_1_ytdlp_aggressive(url, output_path):
+    """JABARDASTI METHOD 1: Bypasses JS challenge pretending to be Android & forces any best format"""
+    print("▶️ Attempting yt-dlp (Aggressive Android Client)...")
     ydl_opts = {
-        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        'format': 'best', # Jo milega download karega, no strict format error
         'outtmpl': output_path,
         'quiet': True,
         'nocheckcertificate': True,
-        'cookiefile': 'cookies.txt' # 🍪 COOKIES LOGIC ADDED HERE!
+        'cookiefile': 'cookies.txt',
+        'extractor_args': {'youtube': ['player_client=android']} # Bypasses "n challenge"
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
     return True
 
+def download_source_2_pytubefix_android(url, output_path):
+    """JABARDASTI METHOD 2: Pytubefix without PO token blocking prompt"""
+    print("▶️ Attempting Pytubefix (Silent Android Mode)...")
+    # use_po_token hatakar client='ANDROID' kiya taaki EOF error na aaye
+    link = YouTube(url, client='ANDROID') 
+    video = link.streams.get_highest_resolution()
+    video.download(filename=output_path)
+    return True
+
+def download_source_3_piped_api(url, output_path):
+    """JABARDASTI METHOD 3: Third-party YouTube Frontend API"""
+    print("▶️ Attempting Piped API (Alternative Server)...")
+    video_id = extract_video_id(url)
+    if not video_id: raise Exception("Invalid ID")
+    res = requests.get(f'https://pipedapi.kavin.rocks/streams/{video_id}', timeout=15)
+    res.raise_for_status()
+    streams = res.json().get('videoStreams', [])
+    best_stream = sorted([s for s in streams if s.get('format') == 'MPEG_4'], key=lambda x: x.get('bitrate', 0), reverse=True)[0]
+    video_data = requests.get(best_stream['url'], stream=True)
+    with open(output_path, 'wb') as f:
+        for chunk in video_data.iter_content(chunk_size=1024):
+            if chunk: f.write(chunk)
+    return True
+
 def robust_download(url, output_path):
     download_sources = [
-        ("Pytubefix", download_source_1_pytubefix),
-        ("Cobalt API", download_source_2_cobalt),
-        ("yt-dlp", download_source_3_ytdlp)
+        ("yt-dlp Aggressive", download_source_1_ytdlp_aggressive),
+        ("Pytubefix Android", download_source_2_pytubefix_android),
+        ("Piped API", download_source_3_piped_api)
     ]
     
     for source_name, download_func in download_sources:
@@ -95,14 +99,14 @@ def robust_download(url, output_path):
             print(f"❌ {source_name} failed: {e}")
             if os.path.exists(output_path):
                 os.remove(output_path)
-            print("🔄 Switching to next source...")
+            print("🔄 Switching to next aggressive source...")
             time.sleep(2)
             
-    print("❌ All API sources failed to download the video.")
+    print("❌ All jabardasti API sources failed to download the video.")
     return False
 
 # =================================================
-# 2. VIDEO EDITING ENGINE (FFmpeg + OpenCV)
+# 2. VIDEO EDITING ENGINE (FFmpeg)
 # =================================================
 
 def get_gameplay_center_x(video_path, sample_frames=30):
@@ -150,7 +154,7 @@ def create_split_short(top_video, bottom_video, output_path, crop_x_ratio):
     subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 # =================================================
-# 3. UPLOAD AND DELIVERY ENGINE[cite: 1]
+# 3. PARALLEL UPLOAD AND DELIVERY ENGINE[cite: 1]
 # =================================================
 
 def send_to_telegram(video_path, caption):
@@ -163,7 +167,7 @@ def send_to_telegram(video_path, caption):
     except Exception as e:
         print(f"Telegram Error: {e}")
 
-# Parallel Upload Functions[cite: 1]
+# (Upload functions collapsed for readability, but kept exactly as you requested)
 def upload_to_gofile(file_path):
     try:
         r = requests.get("https://api.gofile.io/getServer", timeout=10)
@@ -319,7 +323,6 @@ def upload_and_send_webhook(host, file_path, original_url):
 
     if link and link.startswith("http"):
         print(f"✅ SUCCESS → {host.upper()}: {link}")
-        
         if WEBHOOK_URL:
             try:
                 payload = {
@@ -331,7 +334,6 @@ def upload_and_send_webhook(host, file_path, original_url):
                     "status": "success"
                 }
                 requests.post(WEBHOOK_URL, json=payload, timeout=10)
-                print(f"📤 Webhook sent for {host.upper()}")
             except Exception as e:
                 print(f"⚠️ Webhook error for {host}: {e}")
         return (host, link)
@@ -345,7 +347,7 @@ def upload_and_send_webhook(host, file_path, original_url):
 
 def process_job():
     print("\n==================================")
-    print("🚀 Starting Complete Automation Job...")
+    print("🚀 Starting Aggressive Automation Job...")
     print("==================================")
     
     if not os.path.exists(LINKS_FILE):
