@@ -3,7 +3,7 @@ name: Daily Roblox Shorts Bot
 on:
   schedule:
     - cron: '30 4 * * *' # Roz subah 10:00 AM IST par chalega
-  workflow_dispatch: # Manual run ke liye button dega
+  workflow_dispatch: # Manual run ke liye Play button
 
 jobs:
   build_and_publish:
@@ -16,26 +16,32 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11' # Script ke parallel tasks ke liye best version
+          python-version: '3.11' # Best version for concurrent tasks
 
       - name: Install System Dependencies (FFmpeg)
         # Video ko 9:16 mein crop aur split-screen banane ke liye zaroori
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install Python Dependencies
-        # requirements.txt se library install karega
+        # requirements.txt se saari libraries install karega
         run: pip install -r requirements.txt
+
+      - name: Create Cookies File
+        # GitHub Secrets se YOUTUBE_COOKIES utha kar cookies.txt file banayega
+        env:
+          YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+        run: echo "$YOUTUBE_COOKIES" > cookies.txt
 
       - name: Run Automation Script
         env:
-          # GitHub Secrets se Tokens fetch karke aapki script mein pass karega
+          # Tokens aur Webhook URLs environment variables ke through pass honge
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: python main.py 
 
       - name: Commit updated links.txt
-        # Script chalne ke baad bache hue links ko save karega taaki next day naya video bane
+        # Script chalne ke baad bache hue links ko save karega taaki duplicate download na ho
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
