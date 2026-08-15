@@ -31,7 +31,7 @@ UPLOAD_HOSTS = [
 ]
 
 # =================================================
-# 1. FALLBACK DOWNLOADER ENGINE
+# 1. FALLBACK DOWNLOADER ENGINE (WITH COOKIES)
 # =================================================
 
 def extract_video_id(url):
@@ -64,12 +64,13 @@ def download_source_2_cobalt(url, output_path):
     raise Exception("Cobalt returned invalid response")
 
 def download_source_3_ytdlp(url, output_path):
-    print("▶️ Attempting yt-dlp...")
+    print("▶️ Attempting yt-dlp (With Cookies)...")
     ydl_opts = {
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         'outtmpl': output_path,
         'quiet': True,
-        'nocheckcertificate': True
+        'nocheckcertificate': True,
+        'cookiefile': 'cookies.txt' # 🍪 COOKIES LOGIC ADDED HERE!
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
@@ -101,7 +102,7 @@ def robust_download(url, output_path):
     return False
 
 # =================================================
-# 2. VIDEO EDITING ENGINE
+# 2. VIDEO EDITING ENGINE (FFmpeg + OpenCV)
 # =================================================
 
 def get_gameplay_center_x(video_path, sample_frames=30):
@@ -149,7 +150,7 @@ def create_split_short(top_video, bottom_video, output_path, crop_x_ratio):
     subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 # =================================================
-# 3. UPLOAD AND DELIVERY ENGINE (Integrated from Source)
+# 3. UPLOAD AND DELIVERY ENGINE[cite: 1]
 # =================================================
 
 def send_to_telegram(video_path, caption):
@@ -162,7 +163,7 @@ def send_to_telegram(video_path, caption):
     except Exception as e:
         print(f"Telegram Error: {e}")
 
-# Upload Functions[cite: 1]
+# Parallel Upload Functions[cite: 1]
 def upload_to_gofile(file_path):
     try:
         r = requests.get("https://api.gofile.io/getServer", timeout=10)
