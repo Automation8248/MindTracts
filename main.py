@@ -22,15 +22,35 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 os.makedirs(TOP_VIDEOS_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-# All Hosts in Priority Order
 UPLOAD_HOSTS = [
     "gofile", "pixeldrain", "litterbox", "uguu", "pomf", "fileio", "0x0_st",
     "transfer_sh", "tmpfiles", "krakenfiles", "buzzheavier", "send_cm",
     "anontransfer", "filebin", "postimages", "imgbb"
 ]
 
+# ================= 15+ REAL USER AGENTS =================
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (iPad; CPU OS 17_2_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.43 Mobile Safari/537.36",
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.43 Mobile Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 OPR/105.0.0.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Brave/119.0.0.0",
+    "Mozilla/5.0 (Linux; Android 13; rv:121.0) Gecko/121.0 Firefox/121.0",
+    "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
+]
+
 # =================================================
-# 1. STRICT COOKIE-ONLY DOWNLOADER ENGINE
+# 1. THE BULLETPROOF DOWNLOADER ENGINE
 # =================================================
 
 def extract_video_id(url):
@@ -40,49 +60,81 @@ def extract_video_id(url):
         return parse_qs(parsed.query).get('v', [None])[0]
     return None
 
-def download_video_with_cookies(url, output_path):
-    """STRICTLY uses YouTube Cookies via yt-dlp and detects if they are expired."""
-    print("\n▶️ Attempting yt-dlp (Strictly using YouTube Cookies)...")
+def download_method_1_ios_trick(url, output_path):
+    """PRIORITY 1: 'n challenge' bypass by acting as iOS/TV only (No Web Client)"""
+    random_ua = random.choice(USER_AGENTS)
+    print(f"\n▶️ Attempting Method 1: yt-dlp (iOS/TV Spoofing + Cookies)")
+    print(f"🕵️ Using User-Agent: {random_ua}")
     
     ydl_opts = {
-        'format': 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b', 
+        'format': 'b', 
         'outtmpl': output_path,
         'quiet': False,
         'nocheckcertificate': True,
-        'cookiefile': 'cookies.txt', # 🍪 YAHAN COOKIES KA USE HO RAHA HAI
-        'extractor_args': {'youtube': ['player_client=web,tv,ios']} 
+        'http_headers': {'User-Agent': random_ua}, # Yahan Random UA pass ho raha hai
+        'extractor_args': {'youtube': ['player_client=ios,tv']} 
     }
     
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+    if os.path.exists('cookies.txt') and os.path.getsize('cookies.txt') > 0:
+        ydl_opts['cookiefile'] = 'cookies.txt'
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+    return True
+
+def download_method_2_cobalt_api(url, output_path):
+    """PRIORITY 2: Ultimate Fallback API (Hides GitHub's IP completely)"""
+    random_ua = random.choice(USER_AGENTS)
+    print(f"\n▶️ Attempting Method 2: Cobalt API (IP Masking)")
+    print(f"🕵️ Using User-Agent: {random_ua}")
+    
+    headers = {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'User-Agent': random_ua # API ko bhi lagega ki real browser se request aayi hai
+    }
+    data = {'url': url, 'videoQuality': '1080', 'filenamePattern': 'classic'}
+    
+    res = requests.post('https://api.cobalt.tools/api/json', headers=headers, json=data, timeout=20)
+    res.raise_for_status()
+    download_url = res.json().get('url')
+    
+    if download_url:
+        print("⬇️ Cobalt Link Generated, downloading...")
+        # Download karte waqt bhi real UA bhejna zaroori hai
+        video_data = requests.get(download_url, headers={'User-Agent': random_ua}, stream=True)
+        with open(output_path, 'wb') as f:
+            for chunk in video_data.iter_content(chunk_size=1024):
+                if chunk: f.write(chunk)
+        return True
+    raise Exception("Cobalt returned invalid response")
+
+def robust_download(url, output_path):
+    """Cycles through methods to ensure 100% download rate."""
+    download_sources = [
+        ("yt-dlp iOS Spoof", download_method_1_ios_trick),
+        ("Cobalt API", download_method_2_cobalt_api)
+    ]
+    
+    for source_name, download_func in download_sources:
+        try:
+            download_func(url, output_path)
             
-        # Validation
-        if os.path.exists(output_path) and os.path.getsize(output_path) > 1024:
-            print("✅ Success! Video downloaded perfectly using cookies.")
-            return True
-        else:
-            print("❌ Downloaded file is empty or corrupted.")
-            return False
+            if os.path.exists(output_path) and os.path.getsize(output_path) > 1024:
+                print(f"✅ Success! Video downloaded perfectly using {source_name}.")
+                return True
+            else:
+                raise ValueError("File is empty or corrupted.")
+                
+        except Exception as e:
+            print(f"❌ {source_name} failed: {e}")
+            if os.path.exists(output_path):
+                os.remove(output_path)
+            print("🔄 Switching to next bypass method...")
+            time.sleep(2)
             
-    except Exception as e:
-        error_msg = str(e).lower()
-        
-        # 🚨 SMART COOKIE EXPIRED DETECTOR 🚨
-        if any(keyword in error_msg for keyword in ["sign in", "cookies", "bot", "age-restricted", "login"]):
-            print("\n=======================================================")
-            print("🚨 ERROR: YOUTUBE COOKIES EXPIRED YA INVALID HAIN! 🚨")
-            print("👉 Kripya nayi cookies extract karein aur GitHub Secrets")
-            print("   (YOUTUBE_COOKIES) mein update karein.")
-            print("=======================================================\n")
-        else:
-            print(f"❌ Download failed due to other error: {e}")
-            
-        # Cleanup corrupt file if exists
-        if os.path.exists(output_path):
-            os.remove(output_path)
-            
-        return False
+    print("❌ All bypass methods failed to download the video.")
+    return False
 
 # =================================================
 # 2. VIDEO EDITING ENGINE (FFmpeg)
@@ -146,6 +198,7 @@ def send_to_telegram(video_path, caption):
     except Exception as e:
         print(f"Telegram Error: {e}")
 
+# Bulk Upload Functions
 def upload_to_gofile(file_path):
     try:
         r = requests.get("https://api.gofile.io/getServer", timeout=10)
@@ -280,7 +333,6 @@ def upload_to_imgbb(file_path):
     return None
 
 def upload_and_send_webhook(host, file_path, original_url):
-    """Host check and individual Webhook trigger"""
     link = None
     if host == "gofile": link = upload_to_gofile(file_path)
     elif host == "pixeldrain": link = upload_to_pixeldrain(file_path)
@@ -313,7 +365,7 @@ def upload_and_send_webhook(host, file_path, original_url):
                 }
                 requests.post(WEBHOOK_URL, json=payload, timeout=10)
             except Exception as e:
-                print(f"⚠️ Webhook error for {host}: {e}")
+                pass
         return (host, link)
     else:
         print(f"❌ Failed → {host.upper()}")
@@ -325,7 +377,7 @@ def upload_and_send_webhook(host, file_path, original_url):
 
 def process_job():
     print("\n==================================")
-    print("🚀 Starting Cookie-Strict Automation Job...")
+    print("🚀 Starting Multi-Bypass Automation Job...")
     print("==================================")
     
     if not os.path.exists(LINKS_FILE):
@@ -342,19 +394,21 @@ def process_job():
         return
 
     url = urls.pop(0)
+    
+    # Save the remaining links
     with open(LINKS_FILE, 'w') as f:
         for u in urls: f.write(f"{u}\n")
 
     temp_roblox = "temp_roblox.mp4"
     output_short = os.path.join(OUTPUT_FOLDER, f"short_{int(time.time())}.mp4")
 
-    # Step 1: Strict Cookie Download
+    # Step 1: Robust Download
     print(f"📥 Processing Link: {url}")
-    success = download_video_with_cookies(url, temp_roblox)
+    success = robust_download(url, temp_roblox)
     
     if not success:
-        print("❌ Stopping process due to download failure (Check Cookies).")
-        # Put the URL back in the list so it doesn't get skipped next time
+        print("❌ Stopping process due to total download failure.")
+        # Put URL back if it totally fails
         with open(LINKS_FILE, 'r') as f:
             existing = f.read()
         with open(LINKS_FILE, 'w') as f:
@@ -368,18 +422,15 @@ def process_job():
     # Step 3: Telegram Delivery
     send_to_telegram(output_short, "🎮 New Roblox Short Ready!")
     
-    # Step 4: Parallel Uploads to All Hosts + Webhooks
+    # Step 4: Parallel Uploads
     print("\n🚀 Starting parallel uploads to file hosts...\n")
     successful_uploads = []
     
     with ThreadPoolExecutor(max_workers=8) as executor:
-        future_to_host = {executor.submit(upload_and_send_webhook, host, output_short, url): host 
-                         for host in UPLOAD_HOSTS}
-        
+        future_to_host = {executor.submit(upload_and_send_webhook, host, output_short, url): host for host in UPLOAD_HOSTS}
         for future in as_completed(future_to_host):
             result = future.result()
-            if result:
-                successful_uploads.append(result)
+            if result: successful_uploads.append(result)
 
     print(f"\n🎉 Total Successful Uploads: {len(successful_uploads)}")
 
