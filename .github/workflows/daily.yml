@@ -16,26 +16,26 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11' # Best and stable version
+          python-version: '3.11' # Script ke parallel tasks ke liye best version
 
       - name: Install System Dependencies (FFmpeg)
-        # FFmpeg video cropping aur merge karne ke liye zaroori hai
+        # Video ko 9:16 mein crop aur split-screen banane ke liye zaroori
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install Python Dependencies
-        # Yeh aapki requirements.txt se pytubefix, yt-dlp, opencv waghera install karega
+        # requirements.txt se library install karega
         run: pip install -r requirements.txt
 
       - name: Run Automation Script
         env:
-          # GitHub Secrets se Tokens fetch karke script ko pass karega
+          # GitHub Secrets se Tokens fetch karke aapki script mein pass karega
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
         run: python main.py 
 
       - name: Commit updated links.txt
-        # Script chalne ke baad bache hue links ko wapas save karega taaki duplicate na bane
+        # Script chalne ke baad bache hue links ko save karega taaki next day naya video bane
         run: |
           git config --global user.name "GitHub Actions Bot"
           git config --global user.email "actions@github.com"
