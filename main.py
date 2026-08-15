@@ -42,15 +42,16 @@ def extract_video_id(url):
     return None
 
 def download_source_1_ytdlp_aggressive(url, output_path):
-    """JABARDASTI METHOD 1: Bypasses JS challenge pretending to be Android & forces any best format"""
-    print("▶️ Attempting yt-dlp (Aggressive Android Client)...")
+    """JABARDASTI METHOD 1: Bypasses JS challenge using Node.js & Multiple Clients"""
+    print("▶️ Attempting yt-dlp (Ultimate JS Bypass with Node.js)...")
     ydl_opts = {
-        'format': 'best', # Jo milega download karega, no strict format error
+        'format': 'bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b', # Best merged format
         'outtmpl': output_path,
-        'quiet': True,
+        'quiet': False, # Ab humein logs dikhenge agar fail hua toh
         'nocheckcertificate': True,
         'cookiefile': 'cookies.txt',
-        'extractor_args': {'youtube': ['player_client=android']} # Bypasses "n challenge"
+        # Multiple clients pass kar rahe hain, YouTube ek ko block karega toh dusra chalega
+        'extractor_args': {'youtube': ['player_client=web,tv,ios']} 
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
