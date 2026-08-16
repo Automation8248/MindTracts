@@ -1,127 +1,124 @@
 import os
 import requests
 import yt_dlp
+from playwright.sync_api import sync_playwright
 
-# Environment variables se credentials lena
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
 def get_user_ids(file_path="users.txt"):
-    """Reads user IDs or profile URLs from a text file."""
     if not os.path.exists(file_path):
-        print(f"Error: {file_path} file nahi mili.")
+        print(f"Error: {file_path} not found.")
         return []
     with open(file_path, "r", encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip() and not line.startswith("#")]
 
-def send_to_telegram(video_path, caption):
-    """Sends the downloaded video and caption to Telegram."""
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("Telegram bot token ya chat ID missing hai.")
-        return
+def get_latest_video_url(profile_id):
+    """Playwright ka use karke profile se latest video link nikalna"""
+    profile_url = f"https://www.kuaishou.com/profile/{profile_id}"
+    print(f"Scraping profile: {profile_url}")
+    
+    with sync_playwright() as p:
+        # Browser background me run hoga (headless=True)
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        try:
+            page.goto(profile_url, timeout=60000)
+            # Wait for video elements to load on the page
+            page.wait_for_selector('a[href*="/short-video/"]', timeout=15000)
+            
+            # Get the first video link (which is usually the newest)
+            element = page.query_selector('a[href*="/short-video/"]')
+            if element:
+                href = element.get_attribute('href')
+                # Complete the URL if it's a relative path
+                if not href.startswith('http'):
+                    href = f"https://www.kuaishou.com{href}"
+                print(f"Found latest video link: {href}")
+                return href
+        except Exception as e:
+            print(f"Failed to scrape profile {profile_id}: {e}")
+        finally:
+            browser.close()
+    return None
 
+def send_to_telegram(video_path, caption):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
     try:
         with open(video_path, "rb") as video_file:
-            files = {"video": video_file}
-            data = {"chat_id": TELEGRAM_CHAT_ID, "caption": caption[:1024]}
-            res = requests.post(url, data=data, files=files, timeout=120)
-            if res.status_code == 200:
-                print("Telegram par video successfully send ho gayi.")
-            else:
-                print(f"Telegram error: {res.text}")
+            res = requests.post(
+                url, 
+                data={"chat_id": TELEGRAM_CHAT_ID, "caption": caption[:1024]}, 
+                files={"video": video_file}, 
+                timeout=120
+            )
+            print("Telegram response:", res.status_code)
     except Exception as e:
-        print(f"Telegram send failure: {e}")
+        print(f"Telegram error: {e}")
 
 def send_to_webhook(metadata):
-    """Sends video metadata to your webhook."""
     if not WEBHOOK_URL:
-        print("Webhook URL set nahi hai.")
+        return
+    try:
+        requests.post(WEBHOOK_URL, json=metadata, timeout=30)
+        print("Webhook sent successfully.")
+    except Exception as e:
+        print(f"Webhook error: {e}")
+
+def process_user(user_id):
+    # Step 1: Scrape the direct video URL
+    video_url = get_latest_video_url(user_id)
+    if not video_url:
+        print(f"Skipping {user_id} - No video link found.")
         return
 
-    try:
-        res = requests.post(WEBHOOK_URL, json=metadata, timeout=30)
-        print(f"Webhook status: {res.status_code}")
-    except Exception as e:
-        print(f"Webhook send failure: {e}")
-
-def process_user(user_input):
-    """Downloads the latest video for a profile and sends it out."""
-    # Agar direct URL nahi hai toh URL format karein
-    if user_input.startswith("http://") or user_input.startswith("https://"):
-        target_url = user_input
-    else:
-        target_url = f"https://www.kuaishou.com/profile/{user_input}"
-
-    print(f"\nProcessing: {target_url}")
-
-    # yt-dlp configuration: Sirf latest 1 video download karega
+    # Step 2: Download the video using yt-dlp
     ydl_opts = {
         'outtmpl': 'downloads/%(id)s.%(ext)s',
-        'playlist_items': '1',
         'quiet': False,
         'no_warnings': True,
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(target_url, download=True)
-            
-            # Agar profile ek playlist/channel ki tarah behave kare
-            if 'entries' in info and len(info['entries']) > 0:
-                video_data = info['entries'][0]
-            else:
-                video_data = info
-
-            if not video_data:
-                print(f"Koi video nahi mila for {user_input}")
-                return
-
-            video_id = video_data.get("id")
-            title = video_data.get("title", "Kuaishou Video")
-            uploader = video_data.get("uploader", user_input)
-            ext = video_data.get("ext", "mp4")
+            info = ydl.extract_info(video_url, download=True)
+            video_id = info.get("id")
+            ext = info.get("ext", "mp4")
             local_filename = f"downloads/{video_id}.{ext}"
 
             metadata = {
                 "id": video_id,
-                "title": title,
-                "uploader": uploader,
-                "webpage_url": video_data.get("webpage_url", target_url),
-                "view_count": video_data.get("view_count"),
-                "like_count": video_data.get("like_count"),
+                "title": info.get("title", "Kuaishou Video"),
+                "uploader": info.get("uploader", user_id),
+                "webpage_url": video_url,
+                "view_count": info.get("view_count"),
             }
 
-            caption = f"🎬 {title}\n👤 Uploader: {uploader}\n🔗 {metadata['webpage_url']}"
+            caption = f"🎬 {metadata['title']}\n👤 Uploader ID: {user_id}\n🔗 {video_url}"
 
-            # 1. Telegram par bhejna
+            # Step 3: Send files and clean up
             if os.path.exists(local_filename):
-                # Telegram bot API limit: 50MB per video
                 file_size_mb = os.path.getsize(local_filename) / (1024 * 1024)
                 if file_size_mb <= 50:
                     send_to_telegram(local_filename, caption)
                 else:
-                    print(f"Video ka size 50MB se bada hai ({file_size_mb:.2f} MB), Telegram par send nahi ho sakta.")
+                    print("Video exceeds Telegram 50MB limit.")
                 
-                # 2. Webhook par metadata bhejna
                 send_to_webhook(metadata)
-
-                # Local video delete karein (storage bachane ke liye)
-                os.remove(local_filename)
-
+                os.remove(local_filename) # Storage save karne ke liye delete
+                
     except Exception as e:
-        print(f"Error processing {user_input}: {e}")
+        print(f"Download error for {video_url}: {e}")
 
 def main():
     os.makedirs("downloads", exist_ok=True)
     users = get_user_ids("users.txt")
-    if not users:
-        print("users.txt me koi ID nahi mili.")
-        return
-
-    for user in users:
-        process_user(user)
+    for user_id in users:
+        # Example user_id in users.txt should just be: 1695373323
+        process_user(user_id)
 
 if __name__ == "__main__":
     main()
