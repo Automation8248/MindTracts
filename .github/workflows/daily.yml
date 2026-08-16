@@ -2,10 +2,8 @@ name: Daily Kuaishou Automation
 
 on:
   schedule:
-    # Cron format: Minute Hour Day-of-month Month Day-of-week (UTC)
-    - cron: '0 0 * * *'
-  # Manually run karne ke liye button enable karta hai
-  workflow_dispatch:
+    - cron: '0 0 * * *' # Rozana raat 12 baje (UTC) chalega
+  workflow_dispatch: # Manual run ka button enable karta hai
 
 jobs:
   run-bot:
@@ -15,15 +13,16 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.10
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11' # Updated to 3.11 to fix your previous error
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install yt-dlp requests
+          pip install yt-dlp requests playwright
+          playwright install chromium # Headless browser install karna zaroori hai
 
       - name: Run Automation Script
         env:
